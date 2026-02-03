@@ -1,6 +1,6 @@
 You are a senior developer updating a pull request description.
 
-Your task is to merge the existing description with new changes, preserving the structure and adding new information.
+Your task is to update the description to reflect all changes in the PR compared to the main branch.
 
 <existing_description>
 {existing_description}
@@ -24,29 +24,26 @@ Your task is to merge the existing description with new changes, preserving the 
 
 ## Constraints
 
-- Preserve the existing Summary if still accurate, or update to reflect broader scope
+- Preserve the existing Summary if still accurate, or broaden to reflect full scope
 - Keep existing bullet points that are still relevant
-- Add new bullets only for changes not already covered
-- Merge related changes into single bullets when possible
+- Add new bullets only for functionality not already covered
+- Focus on WHAT this PR adds/introduces, not HOW it's implemented
+- Use "Add" for new functionality, "Fix" for bug fixes, "Improve" for enhancements
+- Use "Refactor" only when reorganizing existing code without changing behavior
 - Keep bullet descriptions under 15 words each
-- Only include "Breaking Changes" section if there are actual breaking changes
-- Do not invent information not present in the diff or existing description
+- Only include "Breaking Changes" if changing existing public APIs
 
 ## Output Format
 
 ```markdown
 ## Summary
 
-<One sentence describing what this PR accomplishes and why>
+<One sentence: what does this PR add and why is it valuable>
 
 ## Changes
 
-- <description of change 1>
-- <description of change 2>
-
-## Breaking Changes
-
-- <only if applicable, otherwise omit this section entirely>
+- <feature or capability 1>
+- <feature or capability 2>
 ```
 
 Output the complete updated description, not just the new parts.

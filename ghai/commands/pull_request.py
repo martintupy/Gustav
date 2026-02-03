@@ -1,7 +1,8 @@
 import click
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.prompt import Prompt
+from rich.rule import Rule
 
 from ghai.clients.claude import ClaudeClient
 from ghai.clients.git import GitClient
@@ -12,167 +13,140 @@ from ghai.settings import Settings
 console = Console()
 
 
-def generate_commit_message(claude: ClaudeClient, diff_stat: str, diff: str, files_content: str) -> str:
-    prompt = load_prompt("commit_message", diff_stat=diff_stat, diff=diff, files_content=files_content)
-    return claude.ask(prompt, max_tokens=256)
+def display_pr_preview(title: str, description: str) -> None:
+    content = Group(title, Rule(style="dim"), "", description)
+    console.print()
+    console.print(Panel(content, title="Pull Request", border_style="cyan"))
+    console.print()
 
 
-def generate_pr_description(claude: ClaudeClient, commits: str, diff_stat: str, diff: str, files_content: str) -> str:
-    prompt = load_prompt("pr_description", commits=commits, diff_stat=diff_stat, diff=diff, files_content=files_content)
-    return claude.ask(prompt, max_tokens=512)
+def build_pr_description_prompt(commits: str, diff_stat: str, diff: str, files_content: str) -> str:
+    return load_prompt("pr_description", commits=commits, diff_stat=diff_stat, diff=diff, files_content=files_content)
 
 
-def update_pr_description(
-    claude: ClaudeClient, existing_description: str, commits: str, diff_stat: str, diff: str, files_content: str
-) -> str:
-    prompt = load_prompt(
-        "pr_description_update",
-        existing_description=existing_description,
-        commits=commits,
-        diff_stat=diff_stat,
-        diff=diff,
-        files_content=files_content,
-    )
-    return claude.ask(prompt, max_tokens=512)
-
-
-def generate_pr_title(claude: ClaudeClient, existing_title: str, commits: str, diff_stat: str) -> str:
-    prompt = load_prompt("pr_title", existing_title=existing_title, commits=commits, diff_stat=diff_stat)
+def generate_pr_title(claude: ClaudeClient, commits: str, diff_stat: str) -> str:
+    prompt = load_prompt("pr_title", commits=commits, diff_stat=diff_stat)
     return claude.ask(prompt, max_tokens=128)
 
 
-def collect_files_content(git: GitClient, files: list[str], from_head: bool = False) -> str:
+def collect_files_content(git: GitClient, files: list[str]) -> str:
     content_parts = []
     for file in files:
-        file_content = git.get_file_content_from_head(file) if from_head else git.get_file_content_from_index(file)
+        file_content = git.get_file_content_from_head(file)
         if file_content is not None:
             content_parts.append(f'<file path="{file}">\n{file_content}\n</file>')
     return "\n\n".join(content_parts)
 
 
 @click.command()
+@click.option("--push", "-p", is_flag=True, help="Push before creating PR")
 @click.pass_obj
-def pull_request(settings: Settings):
-    """Generate commit message and create/update PR"""
+def pull_request(settings: Settings, push: bool):
+    """Create or update pull request"""
     claude = ClaudeClient(settings.anthropic)
     git = GitClient()
     github = GitHubClient(settings.github)
 
     branch = git.get_current_branch()
 
-    if branch in ("main", "master"):
-        raise click.ClickException("Create a feature branch first. You're on main/master.")
-
     repo = git.get_remote_repo()
     if not repo:
         raise click.ClickException("Could not determine repository from git remote")
 
-    staged_files = git.get_staged_files()
+    base_branch = github.get_default_branch(repo)
 
-    if not staged_files:
-        console.print("[yellow]No staged changes. Stage files with 'git add' first.[/yellow]")
-        return
+    if branch == base_branch:
+        raise click.ClickException(f"Create a feature branch first. You're on '{base_branch}'.")
 
-    with console.status("[bold blue]Generating commit message..."):
-        diff_stat = git.get_staged_diff_stat()
-        diff = git.get_staged_diff()
-        files_content = collect_files_content(git, staged_files, from_head=False)
-        commit_msg = generate_commit_message(claude, diff_stat, diff, files_content)
-
-    console.print()
-    console.print(Panel(commit_msg, title="Commit Message", border_style="cyan"))
-    console.print()
-
-    choice = Prompt.ask("Commit?", choices=["y", "n", "e"], default="y")
-
-    if choice == "n":
-        console.print("[dim]Aborted.[/dim]")
-        return
-    elif choice == "e":
-        edited_msg = click.edit(commit_msg)
-        if edited_msg is None:
-            console.print("[dim]Aborted.[/dim]")
-            return
-        commit_msg = edited_msg.strip()
-
-    git.commit(commit_msg)
-    console.print("[green]Committed.[/green]")
-
-    with console.status(f"[bold blue]Pushing '{branch}'..."):
-        git.push(branch)
-    console.print(f"[green]Pushed '{branch}'.[/green]")
+    if push:
+        with console.status(f"[bold blue]Pushing '{branch}'..."):
+            git.push(branch)
+        console.print(f"[green]Pushed '{branch}'.[/green]")
 
     pr_data = github.get_pr(repo, branch)
 
+    commits = git.get_branch_commits(base_branch)
+    diff_stat = git.get_branch_diff_stat(base_branch)
+    diff = git.get_branch_diff(base_branch)
+    changed_files = git.get_branch_changed_files(base_branch)
+    files_content = collect_files_content(git, changed_files)
+
+    if not commits.strip() and not diff.strip():
+        raise click.ClickException(
+            f"No commits or changes found compared to '{base_branch}'. "
+            f"Make sure your branch has commits that differ from '{base_branch}'."
+        )
+
     if pr_data:
         pr_number = pr_data["number"]
-        existing_title = pr_data.get("title", "")
         existing_body = pr_data.get("body", "")
 
         console.print(f"\n[bold]Updating existing PR #{pr_number}...[/bold]")
 
-        with console.status("[bold blue]Generating PR description..."):
-            commits = git.get_branch_commits()
-            diff_stat = git.get_branch_diff_stat()
-            diff = git.get_branch_diff()
-            changed_files = git.get_branch_changed_files()
-            files_content = collect_files_content(git, changed_files, from_head=True)
+        prompt = load_prompt(
+            "pr_description_update",
+            existing_description=existing_body,
+            commits=commits,
+            diff_stat=diff_stat,
+            diff=diff,
+            files_content=files_content,
+        )
+        messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
 
-            description = update_pr_description(claude, existing_body, commits, diff_stat, diff, files_content)
-            title = generate_pr_title(claude, existing_title, commits, diff_stat)
+        with console.status("[bold blue]Generating Pull Request..."):
+            description = claude.chat(messages, max_tokens=512)
+            title = generate_pr_title(claude, commits, diff_stat)
 
-        console.print()
-        console.print(Panel(description, title="PR Description", border_style="cyan"))
-        console.print(f"[bold]Title:[/bold] {title}")
-        console.print()
+        while True:
+            display_pr_preview(title, description)
+            console.print("[dim](y) update  (n) cancel  (r) refine with feedback[/dim]")
 
-        choice = Prompt.ask("Update PR?", choices=["y", "n", "e"], default="y")
+            choice = Prompt.ask("Update PR?", choices=["y", "n", "r"], default="y")
 
-        if choice == "n":
-            console.print("[dim]PR unchanged.[/dim]")
-            return
-        elif choice == "e":
-            edited_desc = click.edit(description)
-            if edited_desc is None:
-                console.print("[dim]Aborted.[/dim]")
+            if choice == "y":
+                break
+            elif choice == "n":
+                console.print("[dim]Cancelled.[/dim]")
                 return
-            description = edited_desc.strip()
+            elif choice == "r":
+                feedback = Prompt.ask("[dim]How should I change it?[/dim]")
+                if not feedback:
+                    continue
+                messages.append({"role": "assistant", "content": description})
+                messages.append({"role": "user", "content": feedback})
+                with console.status("[bold blue]Refining PR description..."):
+                    description = claude.chat(messages, max_tokens=512)
 
         github.update_pr(repo, pr_number, title, description)
         console.print(f"[green]PR #{pr_number} updated.[/green]")
 
     else:
-        console.print("\n[bold]Creating new PR...[/bold]")
+        prompt = build_pr_description_prompt(commits, diff_stat, diff, files_content)
+        messages = [{"role": "user", "content": prompt}]
 
-        with console.status("[bold blue]Generating PR description..."):
-            commits = git.get_branch_commits()
-            diff_stat = git.get_branch_diff_stat()
-            diff = git.get_branch_diff()
-            changed_files = git.get_branch_changed_files()
-            files_content = collect_files_content(git, changed_files, from_head=True)
+        with console.status("[bold blue]Generating Pull Request..."):
+            description = claude.chat(messages, max_tokens=512)
+            title = generate_pr_title(claude, commits, diff_stat)
 
-            description = generate_pr_description(claude, commits, diff_stat, diff, files_content)
+        while True:
+            display_pr_preview(title, description)
+            console.print("[dim](y) create  (n) cancel  (r) refine with feedback[/dim]")
 
-        title = commit_msg
+            choice = Prompt.ask("Create PR?", choices=["y", "n", "r"], default="y")
 
-        console.print()
-        console.print(Panel(description, title="PR Description", border_style="cyan"))
-        console.print(f"[bold]Title:[/bold] {title}")
-        console.print()
-
-        choice = Prompt.ask("Create PR?", choices=["y", "n", "e", "w"], default="y")
-
-        if choice == "n":
-            console.print("[dim]Cancelled.[/dim]")
-            return
-        elif choice == "e":
-            edited_desc = click.edit(description)
-            if edited_desc is None:
-                console.print("[dim]Aborted.[/dim]")
+            if choice == "y":
+                break
+            elif choice == "n":
+                console.print("[dim]Cancelled.[/dim]")
                 return
-            description = edited_desc.strip()
-        elif choice == "w":
-            console.print("[dim]Opening in browser...[/dim]")
+            elif choice == "r":
+                feedback = Prompt.ask("[dim]How should I change it?[/dim]")
+                if not feedback:
+                    continue
+                messages.append({"role": "assistant", "content": description})
+                messages.append({"role": "user", "content": feedback})
+                with console.status("[bold blue]Refining PR description..."):
+                    description = claude.chat(messages, max_tokens=512)
 
-        pr_url = github.create_pr(repo, branch, title, description)
+        pr_url = github.create_pr(repo, branch, title, description, base=base_branch)
         console.print(f"[green]PR created: {pr_url}[/green]")

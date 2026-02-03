@@ -3,6 +3,7 @@ from datetime import datetime
 
 import click
 import httpx
+from loguru import logger
 from rich.console import Console
 
 from ghai.settings import GitHubSettings
@@ -27,7 +28,10 @@ class GitHubClient:
         params: dict | None = None,
     ) -> httpx.Response:
         url = f"{self.settings.api_url}/{endpoint.lstrip('/')}"
-        return httpx.request(
+        logger.debug(f"GitHub API: {method} {url}")
+        if json:
+            logger.debug(f"Request body: {json}")
+        response = httpx.request(
             method,
             url,
             headers=self.headers,
@@ -35,6 +39,10 @@ class GitHubClient:
             params=params,
             timeout=30,
         )
+        logger.debug(f"Response: {response.status_code}")
+        if response.status_code >= 400:
+            logger.error(f"GitHub API error: {response.status_code} - {response.text}")
+        return response
 
     def _get_paginated(self, endpoint: str, params: dict | None = None) -> list:
         results = []
@@ -109,6 +117,12 @@ class GitHubClient:
         if response.status_code != 200:
             error = response.json().get("message", response.text)
             raise click.ClickException(f"Failed to edit PR: {error}")
+
+    def get_default_branch(self, repo: str) -> str:
+        response = self._request("GET", f"repos/{repo}")
+        if response.status_code != 200:
+            return "main"
+        return response.json().get("default_branch", "main")
 
     def get_branches(self, repo: str) -> list[str]:
         branches_data = self._get_paginated(f"repos/{repo}/branches")

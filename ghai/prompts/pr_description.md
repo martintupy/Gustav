@@ -1,6 +1,6 @@
 You are a senior developer writing a pull request description.
 
-Your task is to create a clear, reviewer-friendly PR description based on the changes in this branch.
+Your task is to describe what this PR introduces to the codebase compared to the main branch.
 
 <commits>
 {commits}
@@ -20,29 +20,25 @@ Your task is to create a clear, reviewer-friendly PR description based on the ch
 
 ## Constraints
 
-- Describe WHAT changed and WHY, not HOW it's implemented
-- Infer the motivation from the changes when possible
-- Group related changes - one bullet per logical change, not per file
+- Focus on WHAT this PR adds/introduces, not HOW it's implemented
+- Describe the value and functionality being added
+- Use "Add" for new functionality, "Fix" for bug fixes, "Improve" for enhancements
+- Use "Refactor" only when reorganizing existing code without changing behavior
+- Group related items - one bullet per feature/capability, not per file
 - Keep bullet descriptions under 15 words each
-- Only include "Breaking Changes" section if there are actual breaking changes (removed/renamed public APIs, changed signatures, config changes)
-- Analyze the diff additions/deletions, not the full file contents
-- Do not invent testing steps, issue numbers, or information not present in the diff
+- Only include "Breaking Changes" if changing existing public APIs
 
 ## Output Format
 
 ```markdown
 ## Summary
 
-<One sentence describing what this PR accomplishes and why>
+<One sentence: what does this PR add and why is it valuable>
 
 ## Changes
 
-- <description of change 1>
-- <description of change 2>
-
-## Breaking Changes
-
-- <only if applicable, otherwise omit this section entirely>
+- <feature or capability 1>
+- <feature or capability 2>
 ```
 
 ## Example
@@ -50,15 +46,11 @@ Your task is to create a clear, reviewer-friendly PR description based on the ch
 ```markdown
 ## Summary
 
-Add rate limiting to the API to prevent abuse and ensure fair usage across clients.
+Add AI-powered commit message generation to streamline the development workflow.
 
 ## Changes
 
-- Add sliding window rate limiter middleware with configurable limits
-- Return 429 status with Retry-After header when limit exceeded
-- Add rate limit headers to all API responses
-
-## Breaking Changes
-
-- API now returns 429 instead of 503 when rate limited
+- Add CLI command to generate commit messages from staged changes
+- Add Claude API integration for natural language processing
+- Add interactive prompt to refine generated messages
 ```

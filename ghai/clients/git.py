@@ -2,6 +2,7 @@ import re
 import subprocess
 
 import click
+from loguru import logger
 
 
 class GitClient:
@@ -45,32 +46,51 @@ class GitClient:
         result = self._run("show", f"HEAD:{file}")
         return result.stdout
 
+    def _get_base_ref(self, base: str = "main") -> str | None:
+        for ref in [f"origin/{base}", base, "origin/master", "master"]:
+            result = self._run("rev-parse", "--verify", ref, check=False)
+            if result.returncode == 0:
+                return ref
+        return None
+
     def get_branch_diff(self, base: str = "main") -> str:
-        for remote_base in [f"origin/{base}", base]:
-            result = self._run("diff", f"{remote_base}...HEAD", check=False)
+        base_ref = self._get_base_ref(base)
+        logger.debug(f"get_branch_diff: base={base}, base_ref={base_ref}")
+        if base_ref:
+            result = self._run("diff", f"{base_ref}...HEAD", check=False)
+            logger.debug(f"diff {base_ref}...HEAD returned {len(result.stdout)} chars")
             if result.returncode == 0:
                 return result.stdout
-        return ""
+        result = self._run("diff", "--root", "HEAD", check=False)
+        return result.stdout if result.returncode == 0 else ""
 
     def get_branch_diff_stat(self, base: str = "main") -> str:
-        for remote_base in [f"origin/{base}", base]:
-            result = self._run("diff", f"{remote_base}...HEAD", "--stat", check=False)
+        base_ref = self._get_base_ref(base)
+        if base_ref:
+            result = self._run("diff", f"{base_ref}...HEAD", "--stat", check=False)
             if result.returncode == 0:
                 return result.stdout
-        return ""
+        result = self._run("diff", "--root", "HEAD", "--stat", check=False)
+        return result.stdout if result.returncode == 0 else ""
 
     def get_branch_commits(self, base: str = "main") -> str:
-        for remote_base in [f"origin/{base}", base]:
-            result = self._run("log", f"{remote_base}..HEAD", "--oneline", check=False)
+        base_ref = self._get_base_ref(base)
+        if base_ref:
+            result = self._run("log", f"{base_ref}..HEAD", "--oneline", check=False)
             if result.returncode == 0:
                 return result.stdout
-        return ""
+        result = self._run("log", "--oneline", check=False)
+        return result.stdout if result.returncode == 0 else ""
 
     def get_branch_changed_files(self, base: str = "main") -> list[str]:
-        for remote_base in [f"origin/{base}", base]:
-            result = self._run("diff", f"{remote_base}...HEAD", "--name-only", check=False)
+        base_ref = self._get_base_ref(base)
+        if base_ref:
+            result = self._run("diff", f"{base_ref}...HEAD", "--name-only", check=False)
             if result.returncode == 0:
                 return [f for f in result.stdout.strip().split("\n") if f]
+        result = self._run("ls-tree", "-r", "--name-only", "HEAD", check=False)
+        if result.returncode == 0:
+            return [f for f in result.stdout.strip().split("\n") if f]
         return []
 
     def commit(self, message: str) -> None:
