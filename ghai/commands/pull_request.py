@@ -18,6 +18,18 @@ from ghai.settings import Settings
 
 console = Console()
 
+SIMILARITY_THRESHOLD = 0.80
+
+
+def is_similar(old: str, new: str, threshold: float = SIMILARITY_THRESHOLD) -> bool:
+    words_a = set(old.lower().split())
+    words_b = set(new.lower().split())
+    if not words_a or not words_b:
+        return False
+    intersection = len(words_a & words_b)
+    union = len(words_a | words_b)
+    return (intersection / union) >= threshold
+
 
 def unified_diff_text(old: str, new: str) -> Text:
     result = Text()
@@ -84,6 +96,7 @@ def generate_pr_content_cached(
     diff_stat: str,
     diff: str,
     files_content: str,
+    existing_title: str | None,
     existing_body: str | None,
     panel_title: str,
 ) -> tuple[str, str]:
@@ -114,9 +127,20 @@ def generate_pr_content_cached(
         refresh_per_second=10,
         transient=True,
     ) as live:
-        title = generate_pr_title(claude, commits, diff_stat)
+        generated_title = generate_pr_title(claude, commits, diff_stat)
         live.update(build_loading_panel(panel_title, "Generating description..."))
-        description = claude.chat(messages, max_tokens=512)
+        generated_description = claude.chat(messages, max_tokens=512)
+
+    title = generated_title
+    description = generated_description
+
+    if existing_title and is_similar(existing_title, generated_title):
+        title = existing_title
+        console.print("[dim]Title unchanged (similar)[/dim]")
+
+    if existing_body and is_similar(existing_body, generated_description):
+        description = existing_body
+        console.print("[dim]Description unchanged (similar)[/dim]")
 
     set_cached(cache_key, {"title": title, "description": description})
     return title, description
@@ -186,7 +210,7 @@ def pull_request(settings: Settings):
         panel_title = f"Update Pull Request #{pr_number} - {pr_url}"
 
         title, description = generate_pr_content_cached(
-            claude, commits, diff_stat, diff, files_content, existing_body, panel_title
+            claude, commits, diff_stat, diff, files_content, existing_title, existing_body, panel_title
         )
 
         prompt = load_prompt(
@@ -231,7 +255,7 @@ def pull_request(settings: Settings):
         panel_title = "New Pull Request"
 
         title, description = generate_pr_content_cached(
-            claude, commits, diff_stat, diff, files_content, None, panel_title
+            claude, commits, diff_stat, diff, files_content, None, None, panel_title
         )
 
         prompt = build_pr_description_prompt(commits, diff_stat, diff, files_content)
