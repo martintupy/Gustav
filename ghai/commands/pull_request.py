@@ -183,10 +183,11 @@ def pull_request(settings: Settings):
     if branch == base_branch:
         raise click.ClickException(f"Create a feature branch first. You're on '{base_branch}'.")
 
-    if not git.branch_exists_on_remote(branch):
+    needs_push = not git.branch_exists_on_remote(branch) or git.has_unpushed_commits(branch)
+    if needs_push:
         with console.status(f"[bold blue]Pushing '{branch}'..."):
             git.push(branch)
-        console.print(f"[green]Pushed '{branch}' branch.[/green]")
+        console.print(f"[green]Pushed '{branch}'.[/green]")
 
     pr_data = github.get_pr(repo, branch)
 

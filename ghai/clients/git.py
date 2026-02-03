@@ -105,6 +105,13 @@ class GitClient:
         result = self._run("ls-remote", "--heads", "origin", branch, check=False)
         return bool(result.stdout.strip())
 
+    def has_unpushed_commits(self, branch: str) -> bool:
+        result = self._run("rev-list", f"origin/{branch}..HEAD", "--count", check=False)
+        if result.returncode != 0:
+            return False
+        count = result.stdout.strip()
+        return count.isdigit() and int(count) > 0
+
     def get_remote_repo(self) -> str | None:
         result = self._run("remote", "get-url", "origin", check=False)
         if result.returncode != 0:
