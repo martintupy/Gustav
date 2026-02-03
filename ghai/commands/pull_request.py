@@ -220,6 +220,8 @@ def pull_request(settings: Settings):
             claude, commits, diff_stat, diff, files_content, existing_title, existing_body, panel_title
         )
 
+        no_changes = title == existing_title and description == existing_body
+
         prompt = load_prompt(
             "pr_description_update",
             existing_description=existing_body,
@@ -232,9 +234,13 @@ def pull_request(settings: Settings):
 
         while True:
             display_pr_diff(existing_title, title, existing_body, description, panel_title)
-            console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
 
-            choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
+            if no_changes:
+                console.print("[dim](n) cancel  (r) refine[/dim]")
+                choice = Prompt.ask("No changes", choices=["n", "r"], default="n")
+            else:
+                console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
+                choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
 
             if choice == "y":
                 break
@@ -254,6 +260,7 @@ def pull_request(settings: Settings):
                     transient=True,
                 ):
                     description = claude.chat(messages, "pr_description_refine", max_tokens=512)
+                no_changes = False
 
         github.update_pr(repo, pr_number, title, description)
         console.print(f"[green]PR #{pr_number} updated.[/green]")
