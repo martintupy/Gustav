@@ -101,6 +101,10 @@ class GitClient:
         if result.returncode != 0:
             self._run("push", "origin", branch)
 
+    def branch_exists_on_remote(self, branch: str) -> bool:
+        result = self._run("ls-remote", "--heads", "origin", branch, check=False)
+        return bool(result.stdout.strip())
+
     def get_remote_repo(self) -> str | None:
         result = self._run("remote", "get-url", "origin", check=False)
         if result.returncode != 0:

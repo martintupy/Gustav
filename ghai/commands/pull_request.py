@@ -1,5 +1,6 @@
 import click
 from rich.console import Console, Group
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.rule import Rule
@@ -14,7 +15,7 @@ console = Console()
 
 
 def display_pr_preview(title: str, description: str) -> None:
-    content = Group(title, Rule(style="dim"), "", description)
+    content = Group(title, Rule(style="dim"), Markdown(description))
     console.print()
     console.print(Panel(content, title="Pull Request", border_style="cyan"))
     console.print()
@@ -39,9 +40,8 @@ def collect_files_content(git: GitClient, files: list[str]) -> str:
 
 
 @click.command()
-@click.option("--push", "-p", is_flag=True, help="Push before creating PR")
 @click.pass_obj
-def pull_request(settings: Settings, push: bool):
+def pull_request(settings: Settings):
     """Create or update pull request"""
     claude = ClaudeClient(settings.anthropic)
     git = GitClient()
@@ -58,10 +58,10 @@ def pull_request(settings: Settings, push: bool):
     if branch == base_branch:
         raise click.ClickException(f"Create a feature branch first. You're on '{base_branch}'.")
 
-    if push:
+    if not git.branch_exists_on_remote(branch):
         with console.status(f"[bold blue]Pushing '{branch}'..."):
             git.push(branch)
-        console.print(f"[green]Pushed '{branch}'.[/green]")
+        console.print(f"[green]Pushed '{branch}' branch.[/green]")
 
     pr_data = github.get_pr(repo, branch)
 
@@ -93,9 +93,10 @@ def pull_request(settings: Settings, push: bool):
         )
         messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
 
-        with console.status("[bold blue]Generating Pull Request..."):
-            description = claude.chat(messages, max_tokens=512)
+        with console.status("[bold blue]Generating PR title..."):
             title = generate_pr_title(claude, commits, diff_stat)
+        with console.status("[bold blue]Generating PR description..."):
+            description = claude.chat(messages, max_tokens=512)
 
         while True:
             display_pr_preview(title, description)
@@ -124,9 +125,10 @@ def pull_request(settings: Settings, push: bool):
         prompt = build_pr_description_prompt(commits, diff_stat, diff, files_content)
         messages = [{"role": "user", "content": prompt}]
 
-        with console.status("[bold blue]Generating Pull Request..."):
-            description = claude.chat(messages, max_tokens=512)
+        with console.status("[bold blue]Generating PR title..."):
             title = generate_pr_title(claude, commits, diff_stat)
+        with console.status("[bold blue]Generating PR description..."):
+            description = claude.chat(messages, max_tokens=512)
 
         while True:
             display_pr_preview(title, description)
