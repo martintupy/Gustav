@@ -1,6 +1,7 @@
 import difflib
 
 import click
+from loguru import logger
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
@@ -18,17 +19,22 @@ from ghai.settings import Settings
 
 console = Console()
 
-SIMILARITY_THRESHOLD = 0.80
 
+def is_similar(claude: ClaudeClient, old: str, new: str, context: str = "") -> bool:
+    if old == new:
+        logger.debug(f"Similarity check ({context}): texts are identical")
+        return True
 
-def is_similar(old: str, new: str, threshold: float = SIMILARITY_THRESHOLD) -> bool:
-    words_a = set(old.lower().split())
-    words_b = set(new.lower().split())
-    if not words_a or not words_b:
+    if not old.strip() or not new.strip():
+        logger.debug(f"Similarity check ({context}): one text is empty")
         return False
-    intersection = len(words_a & words_b)
-    union = len(words_a | words_b)
-    return (intersection / union) >= threshold
+
+    prompt = load_prompt("pr_description_similarity", text_a=old, text_b=new)
+    response = claude.ask(prompt, "pr_description_similarity", max_tokens=8)
+    result = response.strip().lower() == "yes"
+
+    logger.debug(f"Similarity check ({context}): Claude response='{response.strip()}', similar={result}")
+    return result
 
 
 def unified_diff_text(old: str, new: str) -> Text:
@@ -129,16 +135,16 @@ def generate_pr_content_cached(
     ) as live:
         generated_title = generate_pr_title(claude, commits, diff_stat)
         live.update(build_loading_panel(panel_title, "Generating description..."))
-        generated_description = claude.chat(messages, max_tokens=512)
+        generated_description = claude.chat(messages, "pr_description", max_tokens=512)
 
     title = generated_title
     description = generated_description
 
-    if existing_title and is_similar(existing_title, generated_title):
+    if existing_title and is_similar(claude, existing_title, generated_title, "title"):
         title = existing_title
         console.print("[dim]Title unchanged (similar)[/dim]")
 
-    if existing_body and is_similar(existing_body, generated_description):
+    if existing_body and is_similar(claude, existing_body, generated_description, "description"):
         description = existing_body
         console.print("[dim]Description unchanged (similar)[/dim]")
 
@@ -152,7 +158,7 @@ def build_pr_description_prompt(commits: str, diff_stat: str, diff: str, files_c
 
 def generate_pr_title(claude: ClaudeClient, commits: str, diff_stat: str) -> str:
     prompt = load_prompt("pr_title", commits=commits, diff_stat=diff_stat)
-    return claude.ask(prompt, max_tokens=128)
+    return claude.ask(prompt, "pr_title", max_tokens=128)
 
 
 def collect_files_content(git: GitClient, files: list[str]) -> str:
@@ -247,7 +253,7 @@ def pull_request(settings: Settings):
                     refresh_per_second=10,
                     transient=True,
                 ):
-                    description = claude.chat(messages, max_tokens=512)
+                    description = claude.chat(messages, "pr_description_refine", max_tokens=512)
 
         github.update_pr(repo, pr_number, title, description)
         console.print(f"[green]PR #{pr_number} updated.[/green]")
@@ -285,7 +291,7 @@ def pull_request(settings: Settings):
                     refresh_per_second=10,
                     transient=True,
                 ):
-                    description = claude.chat(messages, max_tokens=512)
+                    description = claude.chat(messages, "pr_description_refine", max_tokens=512)
 
         pr_url = github.create_pr(repo, branch, title, description, base=base_branch)
         console.print(f"[green]PR created: {pr_url}[/green]")

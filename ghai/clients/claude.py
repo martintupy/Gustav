@@ -1,3 +1,5 @@
+import time
+
 import click
 import httpx
 from loguru import logger
@@ -11,16 +13,15 @@ class ClaudeClient:
     def __init__(self, settings: AnthropicSettings):
         self.settings = settings
 
-    def ask(self, prompt: str, max_tokens: int = 256) -> str:
+    def ask(self, prompt: str, prompt_name: str, max_tokens: int = 256) -> str:
         messages = [{"role": "user", "content": prompt}]
-        return self._request(messages, max_tokens)
+        return self._request(messages, prompt_name, max_tokens)
 
-    def chat(self, messages: list[Message], max_tokens: int = 256) -> str:
-        return self._request(messages, max_tokens)
+    def chat(self, messages: list[Message], prompt_name: str, max_tokens: int = 256) -> str:
+        return self._request(messages, prompt_name, max_tokens)
 
-    def _request(self, messages: list[Message], max_tokens: int) -> str:
-        logger.debug(f"Claude API: {self.settings.model}, max_tokens={max_tokens}")
-        logger.debug(f"Messages count: {len(messages)}")
+    def _request(self, messages: list[Message], prompt_name: str, max_tokens: int) -> str:
+        start = time.perf_counter()
         response = httpx.post(
             self.settings.api_url,
             headers={
@@ -35,9 +36,14 @@ class ClaudeClient:
             },
             timeout=self.settings.timeout,
         )
+        elapsed = time.perf_counter() - start
+
         data = response.json()
         if "error" in data:
-            logger.error(f"Claude API error: {data['error']}")
+            logger.error(f"Claude API request error: {data['error']}")
             raise click.ClickException(f"Claude API error: {data['error']['message']}")
-        logger.debug(f"Claude response received, length: {len(data['content'][0]['text'])}")
+
+        logger.debug(
+            f"Claude API response [{prompt_name}]: length={len(data['content'][0]['text'])} elapsed={elapsed:.2f}s"
+        )
         return data["content"][0]["text"]

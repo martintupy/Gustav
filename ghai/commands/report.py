@@ -42,9 +42,7 @@ def report(settings: Settings):
             status.update(f"[bold blue]Summarizing {day}...")
 
             prompt = load_prompt("daily_summary", commits=commits_text)
-            summary = claude.ask(prompt)
+            summary = claude.ask(prompt, "daily_summary")
             table.add_row(f"{day} ({day_name})", summary)
 
-    console.print()
     console.print(table)
-    console.print()

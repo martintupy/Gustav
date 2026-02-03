@@ -1,6 +1,7 @@
 import click
 from pydantic import ValidationError
 
+from ghai.commands.cache import cache
 from ghai.commands.commit import commit
 from ghai.commands.init import init
 from ghai.commands.pull_request import pull_request
@@ -36,6 +37,7 @@ def main(ctx: click.Context):
 
 main.add_command(init)
 main.add_command(status)
+main.add_command(cache)
 main.add_command(commit)
 main.add_command(report)
 main.add_command(pull_request, name="pr")

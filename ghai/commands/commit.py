@@ -38,7 +38,7 @@ def generate_commit_message_cached(claude: ClaudeClient, diff_stat: str, diff: s
     messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
 
     with Live(build_loading_panel("Generating..."), console=console, refresh_per_second=10, transient=True):
-        commit_msg = claude.chat(messages, max_tokens=256)
+        commit_msg = claude.chat(messages, "commit_message", max_tokens=256)
 
     set_cached(cache_key, {"message": commit_msg})
     return commit_msg
@@ -99,7 +99,7 @@ def commit(settings: Settings, push: bool):
             messages.append({"role": "assistant", "content": commit_msg})
             messages.append({"role": "user", "content": feedback})
             with Live(build_loading_panel("Refining..."), console=console, refresh_per_second=10, transient=True):
-                commit_msg = claude.chat(messages, max_tokens=256)
+                commit_msg = claude.chat(messages, "commit_refine", max_tokens=256)
 
     git.commit(commit_msg)
     console.print("[green]Committed.[/green]")
