@@ -1,4 +1,5 @@
 import click
+from prompt_toolkit import prompt as pt_prompt
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
@@ -62,11 +63,9 @@ def commit(settings: Settings, push: bool):
             console.print("[dim]Cancelled.[/dim]")
             return
         elif choice == "e":
-            edited_msg = click.edit(commit_msg, extension=".txt")
-            if edited_msg is None:
-                console.print("[yellow]Editor returned no changes. Use 'r' to refine with feedback instead.[/yellow]")
-                continue
-            commit_msg = edited_msg.strip()
+            edited_msg = pt_prompt("Edit message: ", default=commit_msg)
+            if edited_msg:
+                commit_msg = edited_msg.strip()
             break
         elif choice == "r":
             feedback = Prompt.ask("[dim]How should I change it?[/dim]")

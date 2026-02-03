@@ -23,18 +23,14 @@ Your task is to generate a single-line commit message following Conventional Com
 
 ## Output Format
 
-```
 <type>(<scope>): <description>
-```
 
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 
-Output ONLY the commit message, nothing else.
+Output ONLY the commit message as plain text, no markdown, no backticks, no quotes.
 
 ## Examples
 
-```
 feat(auth): add password reset endpoint
 fix(api): handle null response from payment service
 refactor(utils): extract date formatting into helper
-```
