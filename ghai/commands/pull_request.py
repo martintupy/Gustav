@@ -1,10 +1,15 @@
+import difflib
+
 import click
 from rich.console import Console, Group
-from rich.markdown import Markdown
+from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.rule import Rule
+from rich.spinner import Spinner
+from rich.text import Text
 
+from ghai.cache import get_cache_key, get_cached, set_cached
 from ghai.clients.claude import ClaudeClient
 from ghai.clients.git import GitClient
 from ghai.clients.github import GitHubClient
@@ -14,11 +19,107 @@ from ghai.settings import Settings
 console = Console()
 
 
-def display_pr_preview(title: str, description: str) -> None:
-    content = Group(title, Rule(style="dim"), Markdown(description))
-    console.print()
-    console.print(Panel(content, title="Pull Request", border_style="cyan"))
-    console.print()
+def unified_diff_text(old: str, new: str) -> Text:
+    result = Text()
+    old_lines = old.splitlines()
+    new_lines = new.splitlines()
+    diff_lines = list(difflib.unified_diff(old_lines, new_lines, n=3))
+
+    if not diff_lines:
+        return Text(new)
+
+    for line in diff_lines:
+        if line.startswith("---") or line.startswith("+++") or line.startswith("@@"):
+            continue
+        elif line.startswith("-"):
+            result.append(line[1:] + "\n", style="red strike")
+        elif line.startswith("+"):
+            result.append(line[1:] + "\n", style="green")
+        elif line.startswith(" "):
+            result.append(line[1:] + "\n")
+
+    if not result.plain.strip():
+        return Text(new)
+
+    return result
+
+
+def display_pr_preview(title: str, description: str, panel_title: str = "Pull Request") -> None:
+    content = Group(title, Rule(style="dim"), description)
+    console.print(Panel(content, title=panel_title, border_style="cyan"))
+
+
+def display_pr_diff(
+    old_title: str,
+    new_title: str,
+    old_description: str,
+    new_description: str,
+    panel_title: str,
+) -> None:
+    if old_title != new_title:
+        title_text = Text()
+        title_text.append(old_title, style="red strike")
+        title_text.append("\n")
+        title_text.append(new_title, style="green")
+    else:
+        title_text = Text(new_title)
+
+    if old_description != new_description:
+        desc_diff = unified_diff_text(old_description, new_description)
+    else:
+        desc_diff = Text(new_description)
+
+    content = Group(title_text, Rule(style="dim"), desc_diff)
+    console.print(Panel(content, title=panel_title, border_style="cyan"))
+
+
+def build_loading_panel(panel_title: str, status: str) -> Panel:
+    content = Group(Spinner("dots", text=f" {status}", style="bold blue"))
+    return Panel(content, title=panel_title, border_style="cyan")
+
+
+def generate_pr_content_cached(
+    claude: ClaudeClient,
+    commits: str,
+    diff_stat: str,
+    diff: str,
+    files_content: str,
+    existing_body: str | None,
+    panel_title: str,
+) -> tuple[str, str]:
+    cache_key = get_cache_key(commits, diff_stat, diff, existing_body or "")
+    cached = get_cached(cache_key)
+
+    if cached:
+        console.print("[dim]Using cached result...[/dim]")
+        return cached["title"], cached["description"]
+
+    if existing_body is not None:
+        prompt = load_prompt(
+            "pr_description_update",
+            existing_description=existing_body,
+            commits=commits,
+            diff_stat=diff_stat,
+            diff=diff,
+            files_content=files_content,
+        )
+    else:
+        prompt = build_pr_description_prompt(commits, diff_stat, diff, files_content)
+
+    messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
+
+    with Live(
+        build_loading_panel(panel_title, "Generating title..."),
+        console=console,
+        refresh_per_second=10,
+        transient=True,
+    ) as live:
+        title = generate_pr_title(claude, commits, diff_stat)
+        live.update(build_loading_panel(panel_title, "Generating description..."))
+        description = claude.chat(messages, max_tokens=512)
+
+    set_cached(cache_key, {"title": title, "description": description})
+    return title, description
 
 
 def build_pr_description_prompt(commits: str, diff_stat: str, diff: str, files_content: str) -> str:
@@ -79,9 +180,14 @@ def pull_request(settings: Settings):
 
     if pr_data:
         pr_number = pr_data["number"]
-        existing_body = pr_data.get("body", "")
+        pr_url = pr_data.get("url", "")
+        existing_title = pr_data.get("title", "")
+        existing_body = pr_data.get("body", "") or ""
+        panel_title = f"Update Pull Request #{pr_number} - {pr_url}"
 
-        console.print(f"\n[bold]Updating existing PR #{pr_number}...[/bold]")
+        title, description = generate_pr_content_cached(
+            claude, commits, diff_stat, diff, files_content, existing_body, panel_title
+        )
 
         prompt = load_prompt(
             "pr_description_update",
@@ -93,16 +199,11 @@ def pull_request(settings: Settings):
         )
         messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
 
-        with console.status("[bold blue]Generating PR title..."):
-            title = generate_pr_title(claude, commits, diff_stat)
-        with console.status("[bold blue]Generating PR description..."):
-            description = claude.chat(messages, max_tokens=512)
-
         while True:
-            display_pr_preview(title, description)
-            console.print("[dim](y) update  (n) cancel  (r) refine with feedback[/dim]")
+            display_pr_diff(existing_title, title, existing_body, description, panel_title)
+            console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
 
-            choice = Prompt.ask("Update PR?", choices=["y", "n", "r"], default="y")
+            choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
 
             if choice == "y":
                 break
@@ -115,26 +216,32 @@ def pull_request(settings: Settings):
                     continue
                 messages.append({"role": "assistant", "content": description})
                 messages.append({"role": "user", "content": feedback})
-                with console.status("[bold blue]Refining PR description..."):
+                with Live(
+                    build_loading_panel(panel_title, "Refining description..."),
+                    console=console,
+                    refresh_per_second=10,
+                    transient=True,
+                ):
                     description = claude.chat(messages, max_tokens=512)
 
         github.update_pr(repo, pr_number, title, description)
         console.print(f"[green]PR #{pr_number} updated.[/green]")
 
     else:
+        panel_title = "New Pull Request"
+
+        title, description = generate_pr_content_cached(
+            claude, commits, diff_stat, diff, files_content, None, panel_title
+        )
+
         prompt = build_pr_description_prompt(commits, diff_stat, diff, files_content)
         messages = [{"role": "user", "content": prompt}]
 
-        with console.status("[bold blue]Generating PR title..."):
-            title = generate_pr_title(claude, commits, diff_stat)
-        with console.status("[bold blue]Generating PR description..."):
-            description = claude.chat(messages, max_tokens=512)
-
         while True:
-            display_pr_preview(title, description)
-            console.print("[dim](y) create  (n) cancel  (r) refine with feedback[/dim]")
+            display_pr_preview(title, description, panel_title)
+            console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
 
-            choice = Prompt.ask("Create PR?", choices=["y", "n", "r"], default="y")
+            choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
 
             if choice == "y":
                 break
@@ -147,7 +254,12 @@ def pull_request(settings: Settings):
                     continue
                 messages.append({"role": "assistant", "content": description})
                 messages.append({"role": "user", "content": feedback})
-                with console.status("[bold blue]Refining PR description..."):
+                with Live(
+                    build_loading_panel(panel_title, "Refining description..."),
+                    console=console,
+                    refresh_per_second=10,
+                    transient=True,
+                ):
                     description = claude.chat(messages, max_tokens=512)
 
         pr_url = github.create_pr(repo, branch, title, description, base=base_branch)

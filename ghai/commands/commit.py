@@ -1,9 +1,12 @@
 import click
 from prompt_toolkit import prompt as pt_prompt
-from rich.console import Console
+from rich.console import Console, Group
+from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Prompt
+from rich.spinner import Spinner
 
+from ghai.cache import get_cache_key, get_cached, set_cached
 from ghai.clients.claude import ClaudeClient
 from ghai.clients.git import GitClient
 from ghai.prompts.loader import load_prompt
@@ -11,9 +14,34 @@ from ghai.settings import Settings
 
 console = Console()
 
+PANEL_TITLE = "Commit Message"
+
+
+def build_loading_panel(status: str) -> Panel:
+    content = Group(Spinner("dots", text=f" {status}", style="bold blue"))
+    return Panel(content, title=PANEL_TITLE, border_style="cyan")
+
 
 def build_commit_prompt(diff_stat: str, diff: str, files_content: str) -> str:
     return load_prompt("commit_message", diff_stat=diff_stat, diff=diff, files_content=files_content)
+
+
+def generate_commit_message_cached(claude: ClaudeClient, diff_stat: str, diff: str, files_content: str) -> str:
+    cache_key = get_cache_key("commit", diff_stat, diff)
+    cached = get_cached(cache_key)
+
+    if cached:
+        console.print("[dim]Using cached result...[/dim]")
+        return cached["message"]
+
+    prompt = build_commit_prompt(diff_stat, diff, files_content)
+    messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
+
+    with Live(build_loading_panel("Generating..."), console=console, refresh_per_second=10, transient=True):
+        commit_msg = claude.chat(messages, max_tokens=256)
+
+    set_cached(cache_key, {"message": commit_msg})
+    return commit_msg
 
 
 def collect_files_content(git: GitClient, files: list[str]) -> str:
@@ -43,19 +71,16 @@ def commit(settings: Settings, push: bool):
     diff = git.get_staged_diff()
     files_content = collect_files_content(git, staged_files)
 
+    commit_msg = generate_commit_message_cached(claude, diff_stat, diff, files_content)
+
     prompt = build_commit_prompt(diff_stat, diff, files_content)
     messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
 
-    with console.status("[bold blue]Generating commit message..."):
-        commit_msg = claude.chat(messages, max_tokens=256)
-
     while True:
-        console.print()
-        console.print(Panel(commit_msg, title="Commit Message", border_style="cyan"))
-        console.print()
-        console.print("[dim](y) accept  (n) cancel  (e) edit manually  (r) refine with feedback[/dim]")
+        console.print(Panel(commit_msg, title=PANEL_TITLE, border_style="cyan"))
+        console.print("[dim](y) confirm  (n) cancel  (e) edit  (r) refine[/dim]")
 
-        choice = Prompt.ask("Commit?", choices=["y", "n", "e", "r"], default="y")
+        choice = Prompt.ask("Confirm?", choices=["y", "n", "e", "r"], default="y")
 
         if choice == "y":
             break
@@ -73,7 +98,7 @@ def commit(settings: Settings, push: bool):
                 continue
             messages.append({"role": "assistant", "content": commit_msg})
             messages.append({"role": "user", "content": feedback})
-            with console.status("[bold blue]Refining commit message..."):
+            with Live(build_loading_panel("Refining..."), console=console, refresh_per_second=10, transient=True):
                 commit_msg = claude.chat(messages, max_tokens=256)
 
     git.commit(commit_msg)

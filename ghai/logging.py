@@ -1,8 +1,6 @@
-from pathlib import Path
-
 from loguru import logger
 
-LOG_DIR = Path.home() / ".config" / "ghai" / "logs"
+from ghai.settings import LOG_DIR
 
 
 def setup_logging() -> None:

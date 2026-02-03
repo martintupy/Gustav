@@ -87,6 +87,7 @@ class GitHubClient:
             "number": pr["number"],
             "title": pr.get("title", ""),
             "body": pr.get("body", ""),
+            "url": pr.get("html_url", ""),
         }
 
     def create_pr(self, repo: str, branch: str, title: str, body: str, base: str = "main") -> str:

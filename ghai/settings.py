@@ -9,6 +9,8 @@ from pydantic import BaseModel, SecretStr, field_validator, model_validator
 APP_NAME = "ghai"
 SETTINGS_DIR = Path.home() / ".config" / APP_NAME
 SETTINGS_FILE = SETTINGS_DIR / "config.yaml"
+CACHE_DIR = SETTINGS_DIR / "cache"
+LOG_DIR = SETTINGS_DIR / "logs"
 
 KEYRING_ANTHROPIC_KEY = "ANTHROPIC_API_KEY"
 KEYRING_GITHUB_TOKEN = "GITHUB_TOKEN"

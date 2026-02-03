@@ -35,7 +35,6 @@ Your task is to update the description to reflect all changes in the PR compared
 
 ## Output Format
 
-```markdown
 ## Summary
 
 <One sentence: what does this PR add and why is it valuable>
@@ -44,6 +43,5 @@ Your task is to update the description to reflect all changes in the PR compared
 
 - <feature or capability 1>
 - <feature or capability 2>
-```
 
-Output the complete updated description, not just the new parts.
+Output ONLY the description starting with "## Summary". No preamble, no explanation, no commentary.
