@@ -6,11 +6,11 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.spinner import Spinner
 
-from ghai.cache import get_cache_key, get_cached, set_cached
-from ghai.clients.claude import ClaudeClient
-from ghai.clients.git import GitClient
-from ghai.prompts.loader import load_prompt
-from ghai.settings import Settings
+from gustav.cache import get_cache_key, get_cached, set_cached
+from gustav.clients.claude import ClaudeClient
+from gustav.clients.git import GitClient
+from gustav.prompts.loader import load_prompt
+from gustav.settings import Settings
 
 console = Console()
 

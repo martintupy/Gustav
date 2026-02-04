@@ -1,7 +1,7 @@
 import hashlib
 import json
 
-from ghai.settings import CACHE_DIR
+from gustav.settings import CACHE_DIR
 
 
 def get_cache_key(*args: str) -> str:

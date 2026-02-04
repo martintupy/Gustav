@@ -30,7 +30,6 @@ Your task is to describe what this PR introduces to the codebase compared to the
 
 ## Output Format
 
-```markdown
 ## Summary
 
 <One sentence: what does this PR add and why is it valuable>
@@ -39,11 +38,11 @@ Your task is to describe what this PR introduces to the codebase compared to the
 
 - <feature or capability 1>
 - <feature or capability 2>
-```
+
+Output ONLY the description starting with "## Summary". No preamble, no explanation, no commentary.
 
 ## Example
 
-```markdown
 ## Summary
 
 Add AI-powered commit message generation to streamline the development workflow.
@@ -53,4 +52,3 @@ Add AI-powered commit message generation to streamline the development workflow.
 - Add CLI command to generate commit messages from staged changes
 - Add Claude API integration for natural language processing
 - Add interactive prompt to refine generated messages
-```

@@ -1,14 +1,14 @@
 import click
 from pydantic import ValidationError
 
-from ghai.commands.cache import cache
-from ghai.commands.commit import commit
-from ghai.commands.init import init
-from ghai.commands.pull_request import pull_request
-from ghai.commands.report import report
-from ghai.commands.status import status
-from ghai.logging import setup_logging
-from ghai.settings import load_settings, settings_exist
+from gustav.commands.cache import cache
+from gustav.commands.commit import commit
+from gustav.commands.init import init
+from gustav.commands.pull_request import pull_request
+from gustav.commands.report import report
+from gustav.commands.status import status
+from gustav.logging import setup_logging
+from gustav.settings import load_settings, settings_exist
 
 COMMANDS_REQUIRING_SETTINGS = {"commit", "report", "pr"}
 
@@ -23,7 +23,7 @@ def main(ctx: click.Context):
     invoked = ctx.invoked_subcommand
     if invoked in COMMANDS_REQUIRING_SETTINGS:
         if not settings_exist():
-            raise click.ClickException("Settings not found. Run 'ghai init' first.")
+            raise click.ClickException("Settings not found. Run 'gus init' first.")
 
         try:
             ctx.obj = load_settings()

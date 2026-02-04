@@ -4,7 +4,7 @@ import click
 import httpx
 from loguru import logger
 
-from ghai.settings import AnthropicSettings
+from gustav.settings import AnthropicSettings
 
 Message = dict[str, str]
 

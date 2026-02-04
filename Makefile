@@ -7,21 +7,21 @@ dev:
 	uv sync --extra dev
 
 lint:
-	uv run -- ruff check ghai
+	uv run -- ruff check gustav
 
 format:
-	uv run -- ruff format ghai
+	uv run -- ruff format gustav
 
 fix:
-	uv run -- ruff check --fix ghai
-	uv run -- ruff format ghai
+	uv run -- ruff check --fix gustav
+	uv run -- ruff format gustav
 
 check:
-	uv run -- ruff check ghai
-	uv run -- ruff format --check ghai
+	uv run -- ruff check gustav
+	uv run -- ruff format --check gustav
 
 type:
-	uv run -- mypy ghai
+	uv run -- mypy gustav
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

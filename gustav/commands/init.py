@@ -4,10 +4,9 @@ import click
 from rich.console import Console
 from rich.prompt import Prompt
 
-from ghai.settings import (
+from gustav.settings import (
     SETTINGS_FILE,
     anthropic_key_exists,
-    get_git_config,
     github_token_exists,
     save_anthropic_key,
     save_config_file,
@@ -38,7 +37,7 @@ def prompt_for_secret(name: str, exists: bool, save_fn: Callable[[str], None]) -
 
 @click.command()
 def init():
-    """Initialize ghai configuration"""
+    """Initialize gustav configuration"""
     if settings_exist():
         overwrite = Prompt.ask(
             f"[yellow]Settings already exist at {SETTINGS_FILE}. Overwrite?[/yellow]",
@@ -49,35 +48,20 @@ def init():
             console.print("[dim]Aborted.[/dim]")
             return
 
-    console.print("[bold]Setting up ghai configuration[/bold]\n")
+    console.print("[bold]Setting up gustav configuration[/bold]\n")
 
     prompt_for_secret("Anthropic API key", anthropic_key_exists(), save_anthropic_key)
+
+    console.print("\n[dim]GitHub token requires scopes: repo, read:org[/dim]")
     prompt_for_secret("GitHub token", github_token_exists(), save_github_token)
 
-    git_email = get_git_config("user.email")
-    console.print("\n[dim]Enter your git email addresses (one per line, empty line to finish):[/dim]")
-    emails = []
+    console.print("\n[dim]Enter GitHub organizations to track (empty line to finish):[/dim]")
+    orgs: list[str] = []
     while True:
-        default = git_email if not emails and git_email else ""
-        email = Prompt.ask("  Email", default=default)
-        if not email:
+        org = Prompt.ask("  Organization", default="")
+        if not org:
             break
-        emails.append(email)
-        git_email = None
+        orgs.append(org)
 
-    if not emails:
-        raise click.ClickException("At least one email is required.")
-
-    console.print("\n[dim]Enter GitHub repos to track (format: owner/repo, empty line to finish):[/dim]")
-    repos = []
-    while True:
-        repo = Prompt.ask("  Repo", default="")
-        if not repo:
-            break
-        if "/" not in repo:
-            console.print("[red]Invalid format. Use 'owner/repo'.[/red]")
-            continue
-        repos.append(repo)
-
-    save_config_file(emails, repos)
+    save_config_file(orgs)
     console.print(f"\n[green]Settings saved to {SETTINGS_FILE}[/green]")

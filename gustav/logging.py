@@ -1,6 +1,6 @@
 from loguru import logger
 
-from ghai.settings import LOG_DIR
+from gustav.settings import LOG_DIR
 
 
 def setup_logging() -> None:
@@ -9,7 +9,7 @@ def setup_logging() -> None:
     logger.remove()
 
     logger.add(
-        LOG_DIR / "ghai.log",
+        LOG_DIR / "gus.log",
         rotation="10 MB",
         retention="7 days",
         level="DEBUG",

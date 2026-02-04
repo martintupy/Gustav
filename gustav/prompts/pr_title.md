@@ -19,14 +19,14 @@ Your task is to generate a title following Conventional Commits format that summ
 
 ## Output Format
 
-<type>(<scope>): <description>
+<type>: <description>
 
 Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 
-Output ONLY the title as plain text, no markdown, no backticks, no quotes.
+Output ONLY the title as plain text
 
 ## Examples
 
-feat(auth): add user authentication
-fix(payments): resolve webhook validation errors
-refactor(api): migrate to async request handling
+feat: add user authentication with session management
+fix: resolve webhook validation errors
+refactor: migrate API layer to async request handling

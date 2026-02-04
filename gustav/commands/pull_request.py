@@ -10,12 +10,12 @@ from rich.rule import Rule
 from rich.spinner import Spinner
 from rich.text import Text
 
-from ghai.cache import get_cache_key, get_cached, set_cached
-from ghai.clients.claude import ClaudeClient
-from ghai.clients.git import GitClient
-from ghai.clients.github import GitHubClient
-from ghai.prompts.loader import load_prompt
-from ghai.settings import Settings
+from gustav.cache import get_cache_key, get_cached, set_cached
+from gustav.clients.claude import ClaudeClient
+from gustav.clients.git import GitClient
+from gustav.clients.github import GitHubClient
+from gustav.prompts.loader import load_prompt
+from gustav.settings import Settings
 
 console = Console()
 

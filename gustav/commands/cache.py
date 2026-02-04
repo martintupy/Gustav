@@ -1,8 +1,8 @@
 import click
 from rich.console import Console
 
-from ghai.cache import clear_cache
-from ghai.settings import CACHE_DIR
+from gustav.cache import clear_cache
+from gustav.settings import CACHE_DIR
 
 console = Console()
 

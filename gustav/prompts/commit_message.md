@@ -27,7 +27,7 @@ Your task is to generate a single-line commit message following Conventional Com
 
 Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 
-Output ONLY the commit message as plain text, no markdown, no backticks, no quotes.
+Output ONLY the commit message as plain text
 
 ## Examples
 
