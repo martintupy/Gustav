@@ -35,3 +35,7 @@ gus report
 - GitHub Personal Access Token
 
 See [docs/github-token.md](docs/github-token.md) for token setup instructions.
+
+## Troubleshooting
+
+Run `gus status` to verify your configuration and API connections

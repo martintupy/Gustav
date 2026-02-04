@@ -24,6 +24,20 @@ class GitClient:
         result = self._run("diff", "--cached", "--name-only")
         return [f for f in result.stdout.strip().split("\n") if f]
 
+    def get_modified_files(self) -> list[str]:
+        files = []
+        result = self._run("diff", "--name-only", check=False)
+        if result.returncode == 0:
+            files.extend([f for f in result.stdout.strip().split("\n") if f])
+        result = self._run("ls-files", "--others", "--exclude-standard", check=False)
+        if result.returncode == 0:
+            files.extend([f for f in result.stdout.strip().split("\n") if f])
+        return files
+
+    def stage_files(self, files: list[str]) -> None:
+        if files:
+            self._run("add", *files)
+
     def get_staged_diff(self) -> str:
         result = self._run("diff", "--cached")
         return result.stdout
