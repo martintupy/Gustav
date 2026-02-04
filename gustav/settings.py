@@ -1,14 +1,15 @@
 import subprocess
 from pathlib import Path
-from typing import Self
 
 import keyring
 import yaml
-from pydantic import BaseModel, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, SecretStr
 
-APP_NAME = "ghai"
+APP_NAME = "gus"
 SETTINGS_DIR = Path.home() / ".config" / APP_NAME
 SETTINGS_FILE = SETTINGS_DIR / "config.yaml"
+CACHE_DIR = SETTINGS_DIR / "cache"
+LOG_DIR = SETTINGS_DIR / "logs"
 
 KEYRING_ANTHROPIC_KEY = "ANTHROPIC_API_KEY"
 KEYRING_GITHUB_TOKEN = "GITHUB_TOKEN"
@@ -45,41 +46,26 @@ class GitSettings(BaseModel):
 
 
 class Settings(BaseModel):
-    emails: list[str] = []
-    repos: list[str] = []
+    orgs: list[str] = []
     anthropic: AnthropicSettings
     github: GitHubSettings
     git: GitSettings = GitSettings()
 
-    @field_validator("emails")
-    @classmethod
-    def validate_emails(cls, v: list[str]) -> list[str]:
-        if not v:
-            raise ValueError("At least one email is required")
-        return v
-
-    @model_validator(mode="after")
-    def validate_repos_format(self) -> Self:
-        for repo in self.repos:
-            if "/" not in repo:
-                raise ValueError(f"Invalid repo format '{repo}'. Expected 'owner/repo'")
-        return self
-
 
 def load_settings() -> Settings:
     if not SETTINGS_FILE.exists():
-        raise FileNotFoundError(f"Settings file not found at {SETTINGS_FILE}. Run 'ghai init' first.")
+        raise FileNotFoundError(f"Settings file not found at {SETTINGS_FILE}. Run 'gus init' first.")
 
     with open(SETTINGS_FILE) as f:
         data = yaml.safe_load(f) or {}
 
     anthropic_api_key = keyring.get_password(APP_NAME, KEYRING_ANTHROPIC_KEY)
     if not anthropic_api_key:
-        raise ValueError("Anthropic API key not found in keychain. Run 'ghai init' first.")
+        raise ValueError("Anthropic API key not found in keychain. Run 'gus init' first.")
 
     github_token = keyring.get_password(APP_NAME, KEYRING_GITHUB_TOKEN)
     if not github_token:
-        raise ValueError("GitHub token not found in keychain. Run 'ghai init' first.")
+        raise ValueError("GitHub token not found in keychain. Run 'gus init' first.")
 
     anthropic_data = data.get("anthropic") or {}
     github_data = data.get("github") or {}
@@ -89,8 +75,7 @@ def load_settings() -> Settings:
     git_data.setdefault("user_name", get_git_config("user.name"))
 
     return Settings(
-        emails=data.get("emails", []),
-        repos=data.get("repos", []),
+        orgs=data.get("orgs", []),
         anthropic=AnthropicSettings(api_key=SecretStr(anthropic_api_key), **anthropic_data),
         github=GitHubSettings(token=SecretStr(github_token), **github_data),
         git=GitSettings(**git_data),
@@ -109,9 +94,11 @@ def github_token_exists() -> bool:
     return keyring.get_password(APP_NAME, KEYRING_GITHUB_TOKEN) is not None
 
 
-def save_config_file(emails: list[str], repos: list[str]) -> None:
+def save_config_file(orgs: list[str]) -> None:
     SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
-    data = {"emails": emails, "repos": repos}
+    data: dict = {}
+    if orgs:
+        data["orgs"] = orgs
     with open(SETTINGS_FILE, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 

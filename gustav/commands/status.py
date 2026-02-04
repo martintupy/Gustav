@@ -4,7 +4,7 @@ import keyring
 from rich.console import Console
 from rich.table import Table
 
-from ghai.settings import (
+from gustav.settings import (
     APP_NAME,
     KEYRING_ANTHROPIC_KEY,
     KEYRING_GITHUB_TOKEN,
@@ -69,7 +69,7 @@ def test_github_api() -> str:
 @click.option("--test", is_flag=True, help="Test API connections")
 def status(test: bool):
     """Show configuration status"""
-    table = Table(title="ghai Configuration Status", show_header=False)
+    table = Table(title="gus Configuration Status", show_header=False)
     table.add_column("Key", style="dim")
     table.add_column("Value")
 
@@ -93,14 +93,8 @@ def status(test: bool):
             data = yaml.safe_load(f) or {}
 
         console.print()
-        emails = data.get("emails", [])
-        if emails:
-            console.print(f"[bold]Emails:[/bold] {', '.join(emails)}")
+        orgs = data.get("orgs", [])
+        if orgs:
+            console.print(f"[bold]Organizations:[/bold] {', '.join(orgs)}")
         else:
-            console.print("[bold]Emails:[/bold] [red]None configured[/red]")
-
-        repos = data.get("repos", [])
-        if repos:
-            console.print(f"[bold]Repos:[/bold] {', '.join(repos)}")
-        else:
-            console.print("[bold]Repos:[/bold] [dim]None configured[/dim]")
+            console.print("[bold]Organizations:[/bold] [dim]None configured[/dim]")
