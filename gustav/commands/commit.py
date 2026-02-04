@@ -23,7 +23,13 @@ def select_files_interactive(git: GitClient) -> list[str] | None:
     modified_files = git.get_modified_files()
 
     choices = [questionary.Choice(file, checked=True) for file in modified_files]
-    custom_style = Style.from_dict({"questionmark": "dim", "instruction": "dim"})
+    custom_style = Style.from_dict(
+        {
+            "questionmark": "dim",
+            "instruction": "dim",
+            "answer": "green",
+        }
+    )
     result = questionary.checkbox(
         "Files to stage (uncheck to exclude):",
         choices=choices,
@@ -95,7 +101,6 @@ def commit(settings: Settings, push: bool):
             return
         git.stage_files(selected_files)
         staged_files = git.get_staged_files()
-        console.print(f"[green]Staged {len(staged_files)} file(s).[/green]\n")
 
     diff_stat = git.get_staged_diff_stat()
     diff = git.get_staged_diff()

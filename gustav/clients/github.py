@@ -105,17 +105,17 @@ class GitHubClient:
 
         if response.status_code == 404:
             raise click.ClickException(
-                f"Repository '{repo}' not found. "
-                "Check that your GitHub token has access to this repo."
+                f"Repository '{repo}' not found. Check that your GitHub token has access to this repo."
             )
         if response.status_code in (301, 302):
             location = response.headers.get("Location", "")
             raise click.ClickException(
-                f"Repository '{repo}' has been moved. "
-                f"Update your git remote: git remote set-url origin {location}"
+                f"Repository '{repo}' has been moved. Update your git remote: git remote set-url origin {location}"
             )
         if response.status_code not in (200, 201):
-            error_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+            error_data = (
+                response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+            )
             error = error_data.get("message", response.text)
             raise click.ClickException(f"Failed to create PR: {error}")
 
@@ -141,8 +141,7 @@ class GitHubClient:
         response = self._request("GET", f"repos/{repo}")
         if response.status_code == 404:
             raise click.ClickException(
-                f"Repository '{repo}' not found. "
-                "Check that your GitHub token has access to this repo."
+                f"Repository '{repo}' not found. Check that your GitHub token has access to this repo."
             )
         if response.status_code != 200:
             return "main"
@@ -168,6 +167,10 @@ class GitHubClient:
         if response.status_code != 200:
             raise click.ClickException("Failed to get authenticated user. Check your GitHub token.")
         return response.json().get("login", "")
+
+    def get_user_orgs(self) -> list[str]:
+        orgs_data = self._get_paginated("user/orgs")
+        return [org.get("login", "") for org in orgs_data if org.get("login")]
 
     def get_user_events(self, username: str, since: datetime) -> list[dict]:
         events = self._get_paginated(f"users/{username}/events")

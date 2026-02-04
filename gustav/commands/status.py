@@ -41,7 +41,9 @@ def test_anthropic_api() -> str:
                 org_name = org_data.get("name")
                 logger.debug(f"Anthropic organization name: {org_name}")
             elif org_response.status_code == 401:
-                logger.debug("Anthropic organization endpoint requires admin API key (regular API keys cannot access organization info)")
+                logger.debug(
+                    "Anthropic organization endpoint requires admin API key (regular API keys cannot access organization info)"
+                )
             else:
                 logger.debug(f"Anthropic organization endpoint error: {org_response.text}")
         except Exception as e:
@@ -122,17 +124,5 @@ def status():
         table.add_row("GitHub Permissions", check_github_permissions(scopes))
     table.add_row("Git user.email", get_git_config("user.email") or "[dim]Not set[/dim]")
     table.add_row("Git user.name", get_git_config("user.name") or "[dim]Not set[/dim]")
-
-    if settings_exist():
-        import yaml
-
-        with open(SETTINGS_FILE) as f:
-            data = yaml.safe_load(f) or {}
-
-        orgs = data.get("orgs", [])
-        if orgs:
-            table.add_row("Organizations", ", ".join(orgs))
-        else:
-            table.add_row("Organizations", "[dim]None configured[/dim]")
 
     console.print(table)
