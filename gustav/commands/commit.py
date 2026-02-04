@@ -115,7 +115,7 @@ def commit(settings: Settings, push: bool):
         console.print(Panel(commit_msg, title=PANEL_TITLE, border_style="cyan"))
         console.print("[dim](y) confirm  (n) cancel  (e) edit  (r) refine[/dim]")
 
-        choice = Prompt.ask("Confirm?", choices=["y", "n", "e", "r"], default="y")
+        choice = Prompt.ask("Create commit?", choices=["y", "n", "e", "r"], default="y")
 
         if choice == "y":
             break

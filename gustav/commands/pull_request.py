@@ -240,7 +240,7 @@ def pull_request(settings: Settings):
                 choice = Prompt.ask("No changes", choices=["n", "r"], default="n")
             else:
                 console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
-                choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
+                choice = Prompt.ask("Update PR?", choices=["y", "n", "r"], default="y")
 
             if choice == "y":
                 break
@@ -279,7 +279,7 @@ def pull_request(settings: Settings):
             display_pr_preview(title, description, panel_title)
             console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
 
-            choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
+            choice = Prompt.ask("Create PR?", choices=["y", "n", "r"], default="y")
 
             if choice == "y":
                 break
