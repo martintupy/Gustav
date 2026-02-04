@@ -26,14 +26,7 @@ def select_files_interactive(git: GitClient) -> list[str] | None:
         return None
 
     choices = [questionary.Choice(file, checked=True) for file in modified_files]
-
-    custom_style = Style.from_dict(
-        {
-            "questionmark": "dim",
-            "instruction": "dim",
-        }
-    )
-
+    custom_style = Style.from_dict({"questionmark": "dim", "instruction": "dim"})
     result = questionary.checkbox(
         "Files to stage (uncheck to exclude):",
         choices=choices,
