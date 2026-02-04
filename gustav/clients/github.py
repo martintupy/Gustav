@@ -38,6 +38,7 @@ class GitHubClient:
             json=json,
             params=params,
             timeout=30,
+            follow_redirects=True,
         )
         logger.debug(f"Response: {response.status_code}")
         if response.status_code >= 400:
@@ -107,8 +108,15 @@ class GitHubClient:
                 f"Repository '{repo}' not found. "
                 "Check that your GitHub token has access to this repo."
             )
+        if response.status_code in (301, 302):
+            location = response.headers.get("Location", "")
+            raise click.ClickException(
+                f"Repository '{repo}' has been moved. "
+                f"Update your git remote: git remote set-url origin {location}"
+            )
         if response.status_code not in (200, 201):
-            error = response.json().get("message", response.text)
+            error_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+            error = error_data.get("message", response.text)
             raise click.ClickException(f"Failed to create PR: {error}")
 
         return response.json().get("html_url", "")
