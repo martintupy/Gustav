@@ -21,9 +21,6 @@ PANEL_TITLE = "Commit Message"
 
 def select_files_interactive(git: GitClient) -> list[str] | None:
     modified_files = git.get_modified_files()
-    if not modified_files:
-        console.print("[yellow]No modified files found.[/yellow]")
-        return None
 
     choices = [questionary.Choice(file, checked=True) for file in modified_files]
     custom_style = Style.from_dict({"questionmark": "dim", "instruction": "dim"})
@@ -87,6 +84,11 @@ def commit(settings: Settings, push: bool):
     staged_files = git.get_staged_files()
 
     if not staged_files:
+        modified_files = git.get_modified_files()
+        if not modified_files:
+            console.print("[yellow]No modified files to stage.[/yellow]")
+            return
+
         selected_files = select_files_interactive(git)
         if not selected_files:
             console.print("[dim]No files selected. Cancelled.[/dim]")
