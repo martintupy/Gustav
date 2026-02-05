@@ -7,7 +7,6 @@ Gustav an AI-powered Git assistant that helps streamline your development workfl
 - **Smart Commit Messages**: Generate conventional commit messages from your staged changes using AI
 - **Pull Request Automation**: Create and update pull requests with AI-generated titles and descriptions
 - **Interactive Refinement**: Refine AI-generated content through conversational feedback
-- **Activity Reports**: Generate daily/weekly work summaries from your GitHub activity
 
 ## Installation
 
