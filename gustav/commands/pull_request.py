@@ -82,12 +82,7 @@ def display_pr_diff(
     else:
         title_text = Text(new_title)
 
-    if old_description != new_description:
-        desc_diff = unified_diff_text(old_description, new_description)
-    else:
-        desc_diff = Text(new_description)
-
-    content = Group(title_text, Rule(style="dim"), desc_diff)
+    content = Group(title_text, Rule(style="dim"), new_description)
     console.print(Panel(content, title=panel_title, border_style="cyan"))
 
 
@@ -251,15 +246,19 @@ def pull_request(settings: Settings):
                 feedback = Prompt.ask("[dim]How should I change it?[/dim]")
                 if not feedback:
                     continue
-                messages.append({"role": "assistant", "content": description})
-                messages.append({"role": "user", "content": feedback})
+                refine_prompt = load_prompt(
+                    "pr_description_refine",
+                    current_description=description,
+                    user_feedback=feedback,
+                )
                 with Live(
                     build_loading_panel(panel_title, "Refining description..."),
                     console=console,
                     refresh_per_second=10,
                     transient=True,
                 ):
-                    description = claude.chat(messages, "pr_description_refine", max_tokens=512)
+                    description = claude.chat([{"role": "user", "content": refine_prompt}], "pr_description_refine", max_tokens=512)
+                display_pr_preview(title, description, panel_title)
                 no_changes = False
 
         github.update_pr(repo, pr_number, title, description)
@@ -290,15 +289,19 @@ def pull_request(settings: Settings):
                 feedback = Prompt.ask("[dim]How should I change it?[/dim]")
                 if not feedback:
                     continue
-                messages.append({"role": "assistant", "content": description})
-                messages.append({"role": "user", "content": feedback})
+                refine_prompt = load_prompt(
+                    "pr_description_refine",
+                    current_description=description,
+                    user_feedback=feedback,
+                )
                 with Live(
                     build_loading_panel(panel_title, "Refining description..."),
                     console=console,
                     refresh_per_second=10,
                     transient=True,
                 ):
-                    description = claude.chat(messages, "pr_description_refine", max_tokens=512)
+                    description = claude.chat([{"role": "user", "content": refine_prompt}], "pr_description_refine", max_tokens=512)
+                display_pr_preview(title, description, panel_title)
 
         pr_url = github.create_pr(repo, branch, title, description, base=base_branch)
         console.print(f"[green]PR created: {pr_url}[/green]")
