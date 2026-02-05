@@ -1,10 +1,6 @@
-You are a senior developer updating a pull request description.
+You are a senior developer writing a pull request changes list.
 
-Your task is to update the description to reflect all changes in the PR compared to the main branch.
-
-<existing_description>
-{existing_description}
-</existing_description>
+Your task is to create a detailed list of changes in this PR compared to the main branch.
 
 <commits>
 {commits}
@@ -24,9 +20,6 @@ Your task is to update the description to reflect all changes in the PR compared
 
 ## Constraints
 
-- Preserve the existing Summary if still accurate, or broaden to reflect full scope
-- Keep existing bullet points that are still relevant
-- Add new bullets only for functionality not already covered
 - Focus on WHAT this PR changes, not HOW it's implemented
 - Describe the value and functionality being added, fixed, or improved
 - Use "Add" for new functionality
@@ -34,19 +27,13 @@ Your task is to update the description to reflect all changes in the PR compared
 - Use "Improve" for enhancements
 - Use "Refactor" only when reorganizing existing code without changing behavior
 - Use "Remove" for deleted functionality or deprecated features
-- Create one bullet per feature/capability (group related changes together)
+- Create one bullet per feature/capability (group related changes together), not one bullet per file
 - Keep bullet descriptions under 15 words each
 - Only include "Breaking Changes" if changing existing public APIs
 
 ## Output Format
 
-## Summary
-
-<One sentence: what does this PR change and why is it valuable>
-
-## Changes
-
 - <feature or capability 1>
 - <feature or capability 2>
 
-Output ONLY the description starting with "## Summary". No preamble, no explanation, no commentary.
+Output ONLY the bullet points starting with "- ". No section headers, no preamble, no explanation, no commentary.

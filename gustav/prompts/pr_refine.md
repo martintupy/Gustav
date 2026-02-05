@@ -15,18 +15,12 @@ Update the description according to the user's feedback while maintaining the pr
 ## Constraints
 
 - ALWAYS include both "## Summary" and "## Changes" sections
-- Preserve the Summary section unless the user explicitly asks to change it
-- Update the Summary if the changes affect the overall scope or value proposition
-- Modify bullet points in the Changes section based on user feedback
+- Preserve sections unless the user explicitly asks to change them
 - Focus on WHAT this PR changes, not HOW it's implemented
-- Use "Add" for new functionality
-- Use "Fix" for bug fixes
-- Use "Improve" for enhancements
+- Use "Add" for new functionality, "Fix" for bug fixes, "Improve" for enhancements
 - Use "Refactor" only when reorganizing existing code without changing behavior
-- Use "Remove" for deleted functionality or deprecated features
 - Create one bullet per feature/capability (group related changes together)
 - Keep bullet descriptions under 15 words each
-- Only include "Breaking Changes" if changing existing public APIs
 
 ## Output Format
 
