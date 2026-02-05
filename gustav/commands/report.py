@@ -73,7 +73,8 @@ def report(settings: Settings, days: int):
     if days_to_fetch:
         earliest_day = min(days_to_fetch)
         since = datetime.strptime(earliest_day, "%Y-%m-%d")
-        fetched = github.fetch_activity_by_day(username, settings.orgs, since)
+        orgs = github.get_user_orgs()
+        fetched = github.fetch_activity_by_day(username, orgs, since)
         for day in days_to_fetch:
             if day in fetched:
                 activity_by_day[day] = fetched[day]
@@ -99,7 +100,9 @@ def report(settings: Settings, days: int):
             if not activity:
                 continue
 
-            with Live(build_loading_panel(f"Summarizing {day}..."), console=console, refresh_per_second=10, transient=True):
+            with Live(
+                build_loading_panel(f"Summarizing {day}..."), console=console, refresh_per_second=10, transient=True
+            ):
                 summary = generate_summary(claude, activity)
 
             cache_day(day, username, activity, summary)

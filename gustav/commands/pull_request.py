@@ -26,25 +26,21 @@ def is_similar(claude: ClaudeClient, old: str, new: str, context: str = "") -> b
         return True
 
     if not old.strip() or not new.strip():
-        logger.debug(f"Similarity check ({context}): one text is empty")
         return False
 
-    prompt = load_prompt("pr_description_similarity", text_a=old, text_b=new)
-    response = claude.ask(prompt, "pr_description_similarity", max_tokens=8)
-    result = response.strip().lower() == "yes"
-
-    logger.debug(f"Similarity check ({context}): Claude response='{response.strip()}', similar={result}")
-    return result
+    prompt = load_prompt("pr_similarity", text_a=old, text_b=new)
+    response = claude.ask(prompt, "pr_similarity", max_tokens=8)
+    return response.strip().lower() == "yes"
 
 
 def unified_diff_text(old: str, new: str) -> Text:
+    if old == new:
+        return Text(new)
+
     result = Text()
     old_lines = old.splitlines()
     new_lines = new.splitlines()
-    diff_lines = list(difflib.unified_diff(old_lines, new_lines, n=3))
-
-    if not diff_lines:
-        return Text(new)
+    diff_lines = list(difflib.unified_diff(old_lines, new_lines, n=999))
 
     for line in diff_lines:
         if line.startswith("---") or line.startswith("+++") or line.startswith("@@"):
@@ -103,62 +99,124 @@ def generate_pr_content_cached(
     diff: str,
     files_content: str,
     existing_title: str | None,
-    existing_body: str | None,
+    current_description: str | None,
     panel_title: str,
 ) -> tuple[str, str]:
-    cache_key = get_cache_key(commits, diff_stat, diff, existing_body or "")
+    cache_key = get_cache_key(commits, diff_stat, diff, current_description or "")
     cached = get_cached(cache_key)
 
     if cached:
         console.print("[dim]Using cached result...[/dim]")
         return cached["title"], cached["description"]
 
-    if existing_body is not None:
-        prompt = load_prompt(
-            "pr_description_update",
-            existing_description=existing_body,
-            commits=commits,
-            diff_stat=diff_stat,
-            diff=diff,
-            files_content=files_content,
-        )
-    else:
-        prompt = build_pr_description_prompt(commits, diff_stat, diff, files_content)
-
-    messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
-
     with Live(
-        build_loading_panel(panel_title, "Generating title..."),
+        build_loading_panel(panel_title, "Generating changes..."),
         console=console,
         refresh_per_second=10,
         transient=True,
     ) as live:
-        generated_title = generate_pr_title(claude, commits, diff_stat)
-        live.update(build_loading_panel(panel_title, "Generating description..."))
-        generated_description = claude.chat(messages, "pr_description", max_tokens=512)
+        changes = generate_pr_changes(claude, commits, diff_stat, diff, files_content)
+        live.update(build_loading_panel(panel_title, "Generating summary..."))
+        summary = generate_pr_summary(claude, changes)
+        live.update(build_loading_panel(panel_title, "Generating title..."))
+        title = generate_pr_title(claude, summary)
 
-    title = generated_title
-    description = generated_description
+    generated_description = build_full_description(summary, changes)
 
-    if existing_title and is_similar(claude, existing_title, generated_title, "title"):
-        title = existing_title
-        console.print("[dim]Title unchanged (similar)[/dim]")
+    if current_description and existing_title and is_similar(claude, current_description, generated_description):
+        console.print("[dim]Description similar.[/dim]")
+        return existing_title, current_description
 
-    if existing_body and is_similar(claude, existing_body, generated_description, "description"):
-        description = existing_body
-        console.print("[dim]Description unchanged (similar)[/dim]")
-
-    set_cached(cache_key, {"title": title, "description": description})
-    return title, description
+    set_cached(cache_key, {"title": title, "description": generated_description})
+    return title, generated_description
 
 
-def build_pr_description_prompt(commits: str, diff_stat: str, diff: str, files_content: str) -> str:
-    return load_prompt("pr_description", commits=commits, diff_stat=diff_stat, diff=diff, files_content=files_content)
+def generate_pr_changes(claude: ClaudeClient, commits: str, diff_stat: str, diff: str, files_content: str) -> str:
+    prompt = load_prompt("pr_changes", commits=commits, diff_stat=diff_stat, diff=diff, files_content=files_content)
+    return claude.ask(prompt, "pr_changes", max_tokens=512).strip()
 
 
-def generate_pr_title(claude: ClaudeClient, commits: str, diff_stat: str) -> str:
-    prompt = load_prompt("pr_title", commits=commits, diff_stat=diff_stat)
-    return claude.ask(prompt, "pr_title", max_tokens=128)
+def generate_pr_summary(claude: ClaudeClient, changes: str) -> str:
+    prompt = load_prompt("pr_summary", changes=changes)
+    return claude.ask(prompt, "pr_summary", max_tokens=128).strip()
+
+
+def generate_pr_title(claude: ClaudeClient, summary: str) -> str:
+    prompt = load_prompt("pr_title", summary=summary)
+    return claude.ask(prompt, "pr_title", max_tokens=128).strip()
+
+
+def build_full_description(summary: str, changes: str) -> str:
+    return f"## Summary\n\n{summary}\n\n## Changes\n\n{changes}"
+
+
+def extract_summary_from_description(description: str) -> str | None:
+    if "## Summary" not in description:
+        return None
+    after_header = description.split("## Summary", 1)[1]
+    before_next = after_header.split("## ", 1)[0]
+    return before_next.strip() or None
+
+
+def refine_pr(claude: ClaudeClient, title: str, description: str, panel_title: str) -> tuple[str, str] | None:
+    feedback = Prompt.ask("[dim]How should I change it?[/dim]")
+    if not feedback:
+        return None
+
+    refine_prompt = load_prompt(
+        "pr_refine",
+        current_description=description,
+        user_feedback=feedback,
+    )
+    with Live(
+        build_loading_panel(panel_title, "Refining description..."),
+        console=console,
+        refresh_per_second=10,
+        transient=True,
+    ) as live:
+        new_description = claude.chat([{"role": "user", "content": refine_prompt}], "pr_refine", max_tokens=512)
+        live.update(build_loading_panel(panel_title, "Updating title..."))
+        summary = extract_summary_from_description(new_description)
+        new_title = generate_pr_title(claude, summary) if summary else title
+
+    return new_title, new_description
+
+
+def interactive_pr_loop(
+    claude: ClaudeClient,
+    title: str,
+    description: str,
+    panel_title: str,
+    existing_title: str | None = None,
+    existing_body: str | None = None,
+) -> tuple[str, str] | None:
+    is_update = existing_title is not None
+    no_changes = is_update and title == existing_title and description == existing_body
+
+    while True:
+        if is_update:
+            display_pr_diff(existing_title, title, existing_body or "", description, panel_title)
+        else:
+            display_pr_preview(title, description, panel_title)
+
+        if no_changes:
+            console.print("[dim](n) cancel  (r) refine[/dim]")
+            choice = Prompt.ask("No changes", choices=["n", "r"], default="n")
+        else:
+            console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
+            prompt_text = "Update PR?" if is_update else "Create PR?"
+            choice = Prompt.ask(prompt_text, choices=["y", "n", "r"], default="y")
+
+        if choice == "y":
+            return title, description
+        elif choice == "n":
+            console.print("[dim]Cancelled.[/dim]")
+            return None
+        elif choice == "r":
+            refined = refine_pr(claude, title, description, panel_title)
+            if refined:
+                title, description = refined
+                no_changes = False
 
 
 def collect_files_content(git: GitClient, files: list[str]) -> str:
@@ -179,7 +237,6 @@ def pull_request(settings: Settings):
     github = GitHubClient(settings.github)
 
     branch = git.get_current_branch()
-
     repo = git.get_remote_repo()
     if not repo:
         raise click.ClickException("Could not determine repository from git remote")
@@ -203,12 +260,6 @@ def pull_request(settings: Settings):
     changed_files = git.get_branch_changed_files(base_branch)
     files_content = collect_files_content(git, changed_files)
 
-    if not commits.strip() and not diff.strip():
-        raise click.ClickException(
-            f"No commits or changes found compared to '{base_branch}'. "
-            f"Make sure your branch has commits that differ from '{base_branch}'."
-        )
-
     if pr_data:
         pr_number = pr_data["number"]
         pr_url = pr_data.get("url", "")
@@ -220,48 +271,11 @@ def pull_request(settings: Settings):
             claude, commits, diff_stat, diff, files_content, existing_title, existing_body, panel_title
         )
 
-        no_changes = title == existing_title and description == existing_body
+        result = interactive_pr_loop(claude, title, description, panel_title, existing_title, existing_body)
+        if not result:
+            return
 
-        prompt = load_prompt(
-            "pr_description_update",
-            existing_description=existing_body,
-            commits=commits,
-            diff_stat=diff_stat,
-            diff=diff,
-            files_content=files_content,
-        )
-        messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
-
-        while True:
-            display_pr_diff(existing_title, title, existing_body, description, panel_title)
-
-            if no_changes:
-                console.print("[dim](n) cancel  (r) refine[/dim]")
-                choice = Prompt.ask("No changes", choices=["n", "r"], default="n")
-            else:
-                console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
-                choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
-
-            if choice == "y":
-                break
-            elif choice == "n":
-                console.print("[dim]Cancelled.[/dim]")
-                return
-            elif choice == "r":
-                feedback = Prompt.ask("[dim]How should I change it?[/dim]")
-                if not feedback:
-                    continue
-                messages.append({"role": "assistant", "content": description})
-                messages.append({"role": "user", "content": feedback})
-                with Live(
-                    build_loading_panel(panel_title, "Refining description..."),
-                    console=console,
-                    refresh_per_second=10,
-                    transient=True,
-                ):
-                    description = claude.chat(messages, "pr_description_refine", max_tokens=512)
-                no_changes = False
-
+        title, description = result
         github.update_pr(repo, pr_number, title, description)
         console.print(f"[green]PR #{pr_number} updated.[/green]")
 
@@ -272,33 +286,10 @@ def pull_request(settings: Settings):
             claude, commits, diff_stat, diff, files_content, None, None, panel_title
         )
 
-        prompt = build_pr_description_prompt(commits, diff_stat, diff, files_content)
-        messages = [{"role": "user", "content": prompt}]
+        result = interactive_pr_loop(claude, title, description, panel_title)
+        if not result:
+            return
 
-        while True:
-            display_pr_preview(title, description, panel_title)
-            console.print("[dim](y) confirm  (n) cancel  (r) refine[/dim]")
-
-            choice = Prompt.ask("Confirm?", choices=["y", "n", "r"], default="y")
-
-            if choice == "y":
-                break
-            elif choice == "n":
-                console.print("[dim]Cancelled.[/dim]")
-                return
-            elif choice == "r":
-                feedback = Prompt.ask("[dim]How should I change it?[/dim]")
-                if not feedback:
-                    continue
-                messages.append({"role": "assistant", "content": description})
-                messages.append({"role": "user", "content": feedback})
-                with Live(
-                    build_loading_panel(panel_title, "Refining description..."),
-                    console=console,
-                    refresh_per_second=10,
-                    transient=True,
-                ):
-                    description = claude.chat(messages, "pr_description_refine", max_tokens=512)
-
+        title, description = result
         pr_url = github.create_pr(repo, branch, title, description, base=base_branch)
         console.print(f"[green]PR created: {pr_url}[/green]")

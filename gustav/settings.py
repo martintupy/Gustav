@@ -46,7 +46,6 @@ class GitSettings(BaseModel):
 
 
 class Settings(BaseModel):
-    orgs: list[str] = []
     anthropic: AnthropicSettings
     github: GitHubSettings
     git: GitSettings = GitSettings()
@@ -75,7 +74,6 @@ def load_settings() -> Settings:
     git_data.setdefault("user_name", get_git_config("user.name"))
 
     return Settings(
-        orgs=data.get("orgs", []),
         anthropic=AnthropicSettings(api_key=SecretStr(anthropic_api_key), **anthropic_data),
         github=GitHubSettings(token=SecretStr(github_token), **github_data),
         git=GitSettings(**git_data),
@@ -92,15 +90,6 @@ def anthropic_key_exists() -> bool:
 
 def github_token_exists() -> bool:
     return keyring.get_password(APP_NAME, KEYRING_GITHUB_TOKEN) is not None
-
-
-def save_config_file(orgs: list[str]) -> None:
-    SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
-    data: dict = {}
-    if orgs:
-        data["orgs"] = orgs
-    with open(SETTINGS_FILE, "w") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
 def save_anthropic_key(api_key: str) -> None:

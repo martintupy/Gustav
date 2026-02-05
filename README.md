@@ -9,23 +9,27 @@ Gustav an AI-powered Git assistant that helps streamline your development workfl
 - **Interactive Refinement**: Refine AI-generated content through conversational feedback
 - **Activity Reports**: Generate daily/weekly work summaries from your GitHub activity
 
+## Installation
+
+- **Using uv:** `uv tool install git+https://github.com/martintupy/gustav.git`
+- **Using pip:** `pip install git+https://github.com/martintupy/gustav.git`
+
 ## Quick Start
 
 ```bash
-# Install
-uv tool install -e .
-
 # Initialize
 gus init
 
-# Generate commit message
+# Verify API connecion
+gus status
+```
+
+```bash
+# Generate commit
 gus commit
 
-# Create or update PR
+# Generate pull request
 gus pr
-
-# View work report
-gus report
 ```
 
 ## Requirements
@@ -35,3 +39,7 @@ gus report
 - GitHub Personal Access Token
 
 See [docs/github-token.md](docs/github-token.md) for token setup instructions.
+
+## Troubleshooting
+
+Run `gus status` to verify your configuration and API connections

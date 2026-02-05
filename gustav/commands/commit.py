@@ -64,8 +64,23 @@ def commit(settings: Settings, push: bool):
     staged_files = git.get_staged_files()
 
     if not staged_files:
-        console.print("[yellow]No staged changes. Stage files with 'git add' first.[/yellow]")
-        return
+        modified_files = git.get_modified_files()
+        if not modified_files:
+            console.print("[yellow]No modified files to stage.[/yellow]")
+            return
+
+        console.print(f"[dim]Found {len(modified_files)} modified file(s):[/dim]")
+        for file in modified_files:
+            console.print(f"  [dim]- {file}[/dim]")
+        console.print()
+
+        choice = Prompt.ask("Stage these files?", choices=["y", "n"], default="y")
+        if choice != "y":
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+        git.stage_files(modified_files)
+        staged_files = git.get_staged_files()
 
     diff_stat = git.get_staged_diff_stat()
     diff = git.get_staged_diff()
@@ -80,7 +95,7 @@ def commit(settings: Settings, push: bool):
         console.print(Panel(commit_msg, title=PANEL_TITLE, border_style="cyan"))
         console.print("[dim](y) confirm  (n) cancel  (e) edit  (r) refine[/dim]")
 
-        choice = Prompt.ask("Confirm?", choices=["y", "n", "e", "r"], default="y")
+        choice = Prompt.ask("Create commit?", choices=["y", "n", "e", "r"], default="y")
 
         if choice == "y":
             break
