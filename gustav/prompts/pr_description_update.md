@@ -27,9 +27,14 @@ Your task is to update the description to reflect all changes in the PR compared
 - Preserve the existing Summary if still accurate, or broaden to reflect full scope
 - Keep existing bullet points that are still relevant
 - Add new bullets only for functionality not already covered
-- Focus on WHAT this PR adds/introduces, not HOW it's implemented
-- Use "Add" for new functionality, "Fix" for bug fixes, "Improve" for enhancements
+- Focus on WHAT this PR changes, not HOW it's implemented
+- Describe the value and functionality being added, fixed, or improved
+- Use "Add" for new functionality
+- Use "Fix" for bug fixes
+- Use "Improve" for enhancements
 - Use "Refactor" only when reorganizing existing code without changing behavior
+- Use "Remove" for deleted functionality or deprecated features
+- Create one bullet per feature/capability (group related changes together)
 - Keep bullet descriptions under 15 words each
 - Only include "Breaking Changes" if changing existing public APIs
 
@@ -37,7 +42,7 @@ Your task is to update the description to reflect all changes in the PR compared
 
 ## Summary
 
-<One sentence: what does this PR add and why is it valuable>
+<One sentence: what does this PR change and why is it valuable>
 
 ## Changes
 

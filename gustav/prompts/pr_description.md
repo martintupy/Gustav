@@ -20,11 +20,14 @@ Your task is to describe what this PR introduces to the codebase compared to the
 
 ## Constraints
 
-- Focus on WHAT this PR adds/introduces, not HOW it's implemented
-- Describe the value and functionality being added
-- Use "Add" for new functionality, "Fix" for bug fixes, "Improve" for enhancements
+- Focus on WHAT this PR changes, not HOW it's implemented
+- Describe the value and functionality being added, fixed, or improved
+- Use "Add" for new functionality
+- Use "Fix" for bug fixes
+- Use "Improve" for enhancements
 - Use "Refactor" only when reorganizing existing code without changing behavior
-- Group related items - one bullet per feature/capability, not per file
+- Use "Remove" for deleted functionality or deprecated features
+- Create one bullet per feature/capability (group related changes together)
 - Keep bullet descriptions under 15 words each
 - Only include "Breaking Changes" if changing existing public APIs
 

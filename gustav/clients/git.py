@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 
@@ -6,11 +7,27 @@ from loguru import logger
 
 
 class GitClient:
+    def __init__(self):
+        self._repo_root = None
+
+    def _get_repo_root(self) -> str:
+        if self._repo_root is None:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self._repo_root = result.stdout.strip()
+        return self._repo_root
+
     def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        repo_root = self._get_repo_root()
         result = subprocess.run(
             ["git", *args],
             capture_output=True,
             text=True,
+            cwd=repo_root,
         )
         if check and result.returncode != 0:
             raise click.ClickException(f"git {' '.join(args)} failed: {result.stderr.strip()}")
@@ -36,7 +53,7 @@ class GitClient:
 
     def stage_files(self, files: list[str]) -> None:
         if files:
-            self._run("add", *files)
+            self._run("add", "--", *files)
 
     def get_staged_diff(self) -> str:
         result = self._run("diff", "--cached")

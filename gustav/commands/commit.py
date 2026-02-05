@@ -1,7 +1,5 @@
 import click
-import questionary
 from prompt_toolkit import prompt as pt_prompt
-from prompt_toolkit.styles import Style
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
@@ -17,30 +15,6 @@ from gustav.settings import Settings
 console = Console()
 
 PANEL_TITLE = "Commit Message"
-
-
-def select_files_interactive(git: GitClient) -> list[str] | None:
-    modified_files = git.get_modified_files()
-
-    choices = [questionary.Choice(file, checked=True) for file in modified_files]
-    custom_style = Style.from_dict(
-        {
-            "questionmark": "dim",
-            "instruction": "dim",
-            "answer": "green",
-        }
-    )
-    result = questionary.checkbox(
-        "Files to stage (uncheck to exclude):",
-        choices=choices,
-        instruction="(↑↓ navigate, ␣ toggle, ↵ confirm)",
-        style=custom_style,
-    ).ask()
-
-    if result is None:
-        return None
-
-    return result
 
 
 def build_loading_panel(status: str) -> Panel:
@@ -95,11 +69,17 @@ def commit(settings: Settings, push: bool):
             console.print("[yellow]No modified files to stage.[/yellow]")
             return
 
-        selected_files = select_files_interactive(git)
-        if not selected_files:
-            console.print("[dim]No files selected. Cancelled.[/dim]")
+        console.print(f"[dim]Found {len(modified_files)} modified file(s):[/dim]")
+        for file in modified_files:
+            console.print(f"  [dim]- {file}[/dim]")
+        console.print()
+
+        choice = Prompt.ask("Stage these files?", choices=["y", "n"], default="y")
+        if choice != "y":
+            console.print("[dim]Cancelled.[/dim]")
             return
-        git.stage_files(selected_files)
+
+        git.stage_files(modified_files)
         staged_files = git.get_staged_files()
 
     diff_stat = git.get_staged_diff_stat()
