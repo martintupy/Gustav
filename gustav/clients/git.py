@@ -21,16 +21,23 @@ class GitClient:
             self._repo_root = result.stdout.strip()
         return self._repo_root
 
-    def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    def _run(
+        self, *args: str, check: bool = True, text: bool = True
+    ) -> subprocess.CompletedProcess:
         repo_root = self._get_repo_root()
         result = subprocess.run(
             ["git", *args],
             capture_output=True,
-            text=True,
+            text=text,
             cwd=repo_root,
         )
         if check and result.returncode != 0:
-            raise click.ClickException(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+            stderr = (
+                result.stderr
+                if isinstance(result.stderr, str)
+                else (result.stderr or b"").decode("utf-8", errors="replace")
+            )
+            raise click.ClickException(f"git {' '.join(args)} failed: {stderr.strip()}")
         return result
 
     def get_current_branch(self) -> str:
@@ -74,8 +81,13 @@ class GitClient:
         result = self._run("cat-file", "-e", f"HEAD:{file}", check=False)
         if result.returncode != 0:
             return None
-        result = self._run("show", f"HEAD:{file}")
-        return result.stdout
+        result = self._run("show", f"HEAD:{file}", text=False)
+        if b"\x00" in result.stdout:
+            return None
+        try:
+            return result.stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
 
     def _get_base_ref(self, base: str = "main") -> str | None:
         for ref in [f"origin/{base}", base, "origin/master", "master"]:

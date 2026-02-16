@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.prompt import Prompt
 
 from gustav.settings import (
-    SETTINGS_FILE,
+    CONFIG_FILE,
     anthropic_key_exists,
     github_token_exists,
     save_anthropic_key,

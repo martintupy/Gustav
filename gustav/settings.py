@@ -6,10 +6,11 @@ import yaml
 from pydantic import BaseModel, SecretStr
 
 APP_NAME = "gus"
-SETTINGS_DIR = Path.home() / ".config" / APP_NAME
-SETTINGS_FILE = SETTINGS_DIR / "config.yaml"
-CACHE_DIR = SETTINGS_DIR / "cache"
-LOG_DIR = SETTINGS_DIR / "logs"
+CONFIG_DIR = Path.home() / ".config" / APP_NAME
+CONFIG_FILE = CONFIG_DIR / "config.yaml"
+CACHE_DIR = CONFIG_DIR / "cache"
+DATA_DIR = CONFIG_DIR / "data"
+LOG_DIR = CONFIG_DIR / "logs"
 
 KEYRING_ANTHROPIC_KEY = "ANTHROPIC_API_KEY"
 KEYRING_GITHUB_TOKEN = "GITHUB_TOKEN"
@@ -52,10 +53,10 @@ class Settings(BaseModel):
 
 
 def load_settings() -> Settings:
-    if not SETTINGS_FILE.exists():
-        raise FileNotFoundError(f"Settings file not found at {SETTINGS_FILE}. Run 'gus init' first.")
+    if not config_exist():
+        raise FileNotFoundError(f"Config file not found at {CONFIG_FILE}. Run 'gus init' first.")
 
-    with open(SETTINGS_FILE) as f:
+    with open(CONFIG_FILE) as f:
         data = yaml.safe_load(f) or {}
 
     anthropic_api_key = keyring.get_password(APP_NAME, KEYRING_ANTHROPIC_KEY)
@@ -80,8 +81,8 @@ def load_settings() -> Settings:
     )
 
 
-def settings_exist() -> bool:
-    return SETTINGS_FILE.exists()
+def config_exist() -> bool:
+    return CONFIG_FILE.exists()
 
 
 def anthropic_key_exists() -> bool:

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 
 import click
@@ -11,7 +12,7 @@ from gustav.cache import get_cached, set_cached
 from gustav.clients.claude import ClaudeClient
 from gustav.clients.github import GitHubClient
 from gustav.prompts.loader import load_prompt
-from gustav.settings import Settings
+from gustav.settings import DATA_DIR, Settings
 
 console = Console()
 
@@ -39,6 +40,13 @@ def generate_summary(claude: ClaudeClient, activity: list[str]) -> str:
     activity_text = "\n".join(f"- {a}" for a in activity)
     prompt = load_prompt("report_summary", commits=activity_text)
     return claude.ask(prompt, "report_summary")
+
+
+def save_raw_data(username: str, raw_data: dict) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = DATA_DIR / f"report_{username}.json"
+    output_path.write_text(json.dumps(raw_data, indent=2))
+    console.print(f"[dim]Raw data saved to {output_path}[/dim]")
 
 
 @click.command()
@@ -74,10 +82,11 @@ def report(settings: Settings, days: int):
         earliest_day = min(days_to_fetch)
         since = datetime.strptime(earliest_day, "%Y-%m-%d")
         orgs = github.get_user_orgs()
-        fetched = github.fetch_activity_by_day(username, orgs, since)
+        fetched, raw_data = github.fetch_activity_by_day(username, orgs, since)
         for day in days_to_fetch:
             if day in fetched:
                 activity_by_day[day] = fetched[day]
+        save_raw_data(username, raw_data)
 
     all_days = sorted(set(cached_results.keys()) | set(activity_by_day.keys()), reverse=True)
 

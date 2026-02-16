@@ -9,11 +9,11 @@ from gustav.settings import (
     APP_NAME,
     KEYRING_ANTHROPIC_KEY,
     KEYRING_GITHUB_TOKEN,
-    SETTINGS_FILE,
+    CONFIG_FILE,
     anthropic_key_exists,
     get_git_config,
     github_token_exists,
-    settings_exist,
+    config_exist,
 )
 
 console = Console()
@@ -115,8 +115,8 @@ def status():
     table.add_column("Key", style="dim")
     table.add_column("Value")
 
-    config_status = "[green]OK[/green]" if settings_exist() else "[red]Not found[/red]"
-    table.add_row("Config", f"{config_status} ({SETTINGS_FILE})")
+    config_status = "[green]OK[/green]" if config_exist() else "[red]Not found[/red]"
+    table.add_row("Config", f"{config_status} ({CONFIG_FILE})")
     table.add_row("Anthropic API", test_anthropic_api())
     github_status, scopes = test_github_api()
     table.add_row("GitHub API", github_status)

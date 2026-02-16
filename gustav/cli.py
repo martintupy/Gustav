@@ -8,7 +8,7 @@ from gustav.commands.pull_request import pull_request
 from gustav.commands.report import report
 from gustav.commands.status import status
 from gustav.logging import setup_logging
-from gustav.settings import load_settings, settings_exist
+from gustav.settings import load_settings, config_exist
 
 COMMANDS_REQUIRING_SETTINGS = {"commit", "report", "pr"}
 
@@ -22,7 +22,7 @@ def main(ctx: click.Context):
 
     invoked = ctx.invoked_subcommand
     if invoked in COMMANDS_REQUIRING_SETTINGS:
-        if not settings_exist():
+        if not config_exist():
             raise click.ClickException("Settings not found. Run 'gus init' first.")
 
         try:
