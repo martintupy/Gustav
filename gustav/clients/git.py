@@ -49,6 +49,17 @@ class GitClient:
         result = self._run("diff", "--cached", "--name-only")
         return [f for f in result.stdout.strip().split("\n") if f]
 
+    def get_staged_renames(self) -> set[str]:
+        result = self._run("diff", "--cached", "-M", "--name-status", check=False)
+        renamed_files: set[str] = set()
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("\t")
+            if parts[0].startswith("R") and len(parts) == 3:
+                renamed_files.add(parts[2])
+        return renamed_files
+
     def get_modified_files(self) -> list[str]:
         files = []
         result = self._run("diff", "--name-only", check=False)
@@ -125,6 +136,20 @@ class GitClient:
                 return result.stdout
         result = self._run("log", "--oneline", check=False)
         return result.stdout if result.returncode == 0 else ""
+
+    def get_branch_renames(self, base: str = "main") -> set[str]:
+        base_ref = self._get_base_ref(base)
+        if not base_ref:
+            return set()
+        result = self._run("diff", f"{base_ref}...HEAD", "-M", "--name-status", check=False)
+        renamed_files: set[str] = set()
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("\t")
+            if parts[0].startswith("R") and len(parts) == 3:
+                renamed_files.add(parts[2])
+        return renamed_files
 
     def get_branch_changed_files(self, base: str = "main") -> list[str]:
         base_ref = self._get_base_ref(base)
