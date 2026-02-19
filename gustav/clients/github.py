@@ -45,13 +45,16 @@ class GitHubClient:
             logger.error(f"GitHub API error: {response.status_code} - {response.text}")
         return response
 
-    def _get_paginated(self, endpoint: str, params: dict | None = None) -> list:
+    def _get_paginated(self, endpoint: str, params: dict | None = None, max_pages: int | None = None) -> list:
         results = []
         params = params.copy() if params else {}
         params["per_page"] = 100
         page = 1
 
         while True:
+            if max_pages is not None and page > max_pages:
+                break
+
             params["page"] = page
             response = self._request("GET", endpoint, params=params)
             if response.status_code != 200:
@@ -173,21 +176,16 @@ class GitHubClient:
         return [org.get("login", "") for org in orgs_data if org.get("login")]
 
     def get_user_events(self, username: str, since: datetime) -> list[dict]:
-        events = self._get_paginated(f"users/{username}/events")
+        events = self._get_paginated(f"users/{username}/events", max_pages=10)
         logger.debug(f"Fetched {len(events)} total events for {username}")
 
-        filtered = []
-        repos_seen: set[str] = set()
-        for event in events:
-            created_at = event.get("created_at", "")
-            repo_name = event.get("repo", {}).get("name", "")
-            repos_seen.add(repo_name)
-            if created_at:
-                event_date = datetime.strptime(created_at[:10], "%Y-%m-%d")
-                if event_date >= since:
-                    filtered.append(event)
+        filtered = [
+            event
+            for event in events
+            if event.get("created_at")
+            and datetime.strptime(event["created_at"][:10], "%Y-%m-%d") >= since
+        ]
 
-        logger.debug(f"Repos in events: {sorted(repos_seen)}")
         logger.debug(f"Filtered to {len(filtered)} events since {since.strftime('%Y-%m-%d')}")
         return filtered
 

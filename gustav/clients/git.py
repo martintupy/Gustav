@@ -16,8 +16,9 @@ class GitClient:
                 ["git", "rev-parse", "--show-toplevel"],
                 capture_output=True,
                 text=True,
-                check=True,
             )
+            if result.returncode != 0:
+                raise click.ClickException("Not a git repository. Run this command from within a git repo.")
             self._repo_root = result.stdout.strip()
         return self._repo_root
 

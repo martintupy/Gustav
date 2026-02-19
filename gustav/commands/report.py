@@ -1,5 +1,7 @@
+import csv
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import click
 from rich.console import Console, Group
@@ -51,8 +53,9 @@ def save_raw_data(username: str, raw_data: dict) -> None:
 
 @click.command()
 @click.option("--days", "-d", default=7, help="Number of days to include in the report")
+@click.option("--csv", "csv_path", default=None, type=click.Path(), help="Export report to CSV file")
 @click.pass_obj
-def report(settings: Settings, days: int):
+def report(settings: Settings, days: int, csv_path: str | None):
     """Generate a daily work report from GitHub activity"""
     claude = ClaudeClient(settings.anthropic)
     github = GitHubClient(settings.github)
@@ -94,9 +97,7 @@ def report(settings: Settings, days: int):
         console.print(f"[yellow]No activity found in the last {days} days.[/yellow]")
         return
 
-    table = Table(title=f"Work Report (last {days} days)", show_header=True, header_style="bold cyan")
-    table.add_column("Date", style="bold")
-    table.add_column("Summary")
+    rows: list[tuple[str, str, str]] = []
 
     for day in all_days:
         day_dt = datetime.strptime(day, "%Y-%m-%d")
@@ -116,6 +117,19 @@ def report(settings: Settings, days: int):
 
             cache_day(day, username, activity, summary)
 
-        table.add_row(f"{day} ({day_name})", summary)
+        rows.append((day, day_name, summary))
 
-    console.print(table)
+    if csv_path:
+        output = Path(csv_path)
+        with output.open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Date", "Day", "Summary"])
+            writer.writerows(rows)
+        console.print(f"[dim]Report exported to {output}[/dim]")
+    else:
+        table = Table(title=f"Work Report (last {days} days)", show_header=True, header_style="bold cyan")
+        table.add_column("Date", style="bold")
+        table.add_column("Summary")
+        for day, day_name, summary in rows:
+            table.add_row(f"{day} ({day_name})", summary)
+        console.print(table)
