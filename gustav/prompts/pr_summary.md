@@ -1,20 +1,19 @@
 You are a senior developer writing a pull request summary.
 
-Your task is to create a concise summary sentence based on the detailed changes in this PR.
+Your task is to write a single summary sentence based on the diff below.
 
 <changes>
 {changes}
 </changes>
 
-## Constraints
+## Rules
 
-- Write ONE sentence that captures what this PR adds/changes and why it's valuable
-- Be concise but comprehensive
-- Focus on the overall value and impact, not implementation details
-- Should reflect all major changes listed
+- Write exactly ONE sentence, be concise but comprehensive
+- State WHAT changed concretely (name specific, files, features) — not abstract descriptions
+- Do NOT explain why it's valuable, how it improves workflow, or add any justification
+- Do NOT use filler phrases like "improves developer experience", "streamlines workflow", "enhances productivity"
+- If the PR does multiple things, pick the primary change and mention secondary ones briefly
 
-## Output Format
+## Output
 
-<One sentence: what does this PR change and why is it valuable>
-
-Output ONLY the summary sentence. No section headers, no preamble, no explanation, no commentary.
+Output ONLY the summary sentence. No headers, no preamble, no explanation.

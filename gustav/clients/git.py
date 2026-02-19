@@ -16,21 +16,29 @@ class GitClient:
                 ["git", "rev-parse", "--show-toplevel"],
                 capture_output=True,
                 text=True,
-                check=True,
             )
+            if result.returncode != 0:
+                raise click.ClickException("Not a git repository. Run this command from within a git repo.")
             self._repo_root = result.stdout.strip()
         return self._repo_root
 
-    def _run(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    def _run(
+        self, *args: str, check: bool = True, text: bool = True
+    ) -> subprocess.CompletedProcess:
         repo_root = self._get_repo_root()
         result = subprocess.run(
             ["git", *args],
             capture_output=True,
-            text=True,
+            text=text,
             cwd=repo_root,
         )
         if check and result.returncode != 0:
-            raise click.ClickException(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+            stderr = (
+                result.stderr
+                if isinstance(result.stderr, str)
+                else (result.stderr or b"").decode("utf-8", errors="replace")
+            )
+            raise click.ClickException(f"git {' '.join(args)} failed: {stderr.strip()}")
         return result
 
     def get_current_branch(self) -> str:
@@ -40,6 +48,17 @@ class GitClient:
     def get_staged_files(self) -> list[str]:
         result = self._run("diff", "--cached", "--name-only")
         return [f for f in result.stdout.strip().split("\n") if f]
+
+    def get_staged_renames(self) -> set[str]:
+        result = self._run("diff", "--cached", "-M", "--name-status", check=False)
+        renamed_files: set[str] = set()
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("\t")
+            if parts[0].startswith("R") and len(parts) == 3:
+                renamed_files.add(parts[2])
+        return renamed_files
 
     def get_modified_files(self) -> list[str]:
         files = []
@@ -74,8 +93,13 @@ class GitClient:
         result = self._run("cat-file", "-e", f"HEAD:{file}", check=False)
         if result.returncode != 0:
             return None
-        result = self._run("show", f"HEAD:{file}")
-        return result.stdout
+        result = self._run("show", f"HEAD:{file}", text=False)
+        if b"\x00" in result.stdout:
+            return None
+        try:
+            return result.stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
 
     def _get_base_ref(self, base: str = "main") -> str | None:
         for ref in [f"origin/{base}", base, "origin/master", "master"]:
@@ -112,6 +136,20 @@ class GitClient:
                 return result.stdout
         result = self._run("log", "--oneline", check=False)
         return result.stdout if result.returncode == 0 else ""
+
+    def get_branch_renames(self, base: str = "main") -> set[str]:
+        base_ref = self._get_base_ref(base)
+        if not base_ref:
+            return set()
+        result = self._run("diff", f"{base_ref}...HEAD", "-M", "--name-status", check=False)
+        renamed_files: set[str] = set()
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("\t")
+            if parts[0].startswith("R") and len(parts) == 3:
+                renamed_files.add(parts[2])
+        return renamed_files
 
     def get_branch_changed_files(self, base: str = "main") -> list[str]:
         base_ref = self._get_base_ref(base)

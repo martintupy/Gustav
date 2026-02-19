@@ -45,8 +45,11 @@ def generate_commit_message_cached(claude: ClaudeClient, diff_stat: str, diff: s
 
 
 def collect_files_content(git: GitClient, files: list[str]) -> str:
+    renamed_files = git.get_staged_renames()
     content_parts = []
     for file in files:
+        if file in renamed_files:
+            continue
         file_content = git.get_file_content_from_index(file)
         if file_content is not None:
             content_parts.append(f'<file path="{file}">\n{file_content}\n</file>')

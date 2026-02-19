@@ -45,13 +45,16 @@ class GitHubClient:
             logger.error(f"GitHub API error: {response.status_code} - {response.text}")
         return response
 
-    def _get_paginated(self, endpoint: str, params: dict | None = None) -> list:
+    def _get_paginated(self, endpoint: str, params: dict | None = None, max_pages: int | None = None) -> list:
         results = []
         params = params.copy() if params else {}
         params["per_page"] = 100
         page = 1
 
         while True:
+            if max_pages is not None and page > max_pages:
+                break
+
             params["page"] = page
             response = self._request("GET", endpoint, params=params)
             if response.status_code != 200:
@@ -173,21 +176,16 @@ class GitHubClient:
         return [org.get("login", "") for org in orgs_data if org.get("login")]
 
     def get_user_events(self, username: str, since: datetime) -> list[dict]:
-        events = self._get_paginated(f"users/{username}/events")
+        events = self._get_paginated(f"users/{username}/events", max_pages=10)
         logger.debug(f"Fetched {len(events)} total events for {username}")
 
-        filtered = []
-        repos_seen: set[str] = set()
-        for event in events:
-            created_at = event.get("created_at", "")
-            repo_name = event.get("repo", {}).get("name", "")
-            repos_seen.add(repo_name)
-            if created_at:
-                event_date = datetime.strptime(created_at[:10], "%Y-%m-%d")
-                if event_date >= since:
-                    filtered.append(event)
+        filtered = [
+            event
+            for event in events
+            if event.get("created_at")
+            and datetime.strptime(event["created_at"][:10], "%Y-%m-%d") >= since
+        ]
 
-        logger.debug(f"Repos in events: {sorted(repos_seen)}")
         logger.debug(f"Filtered to {len(filtered)} events since {since.strftime('%Y-%m-%d')}")
         return filtered
 
@@ -199,15 +197,20 @@ class GitHubClient:
         params = {"author": author, "since": since.strftime("%Y-%m-%dT00:00:00Z")}
         return self._get_paginated(f"repos/{repo}/commits", params=params)
 
-    def fetch_org_commits(self, org: str, username: str, since: datetime) -> dict[str, list[str]]:
+    def fetch_org_commits(
+        self, org: str, username: str, since: datetime
+    ) -> tuple[dict[str, list[str]], dict[str, list[dict]]]:
         logger.debug(f"Fetching repos from {org}")
         repos = self.get_org_repos(org)
         logger.debug(f"Found {len(repos)} repos in {org}")
 
         commits_by_day: dict[str, list[str]] = defaultdict(list)
+        raw_commits_by_repo: dict[str, list[dict]] = {}
 
         for repo in repos:
             commits = self.get_repo_commits(repo, username, since)
+            if commits:
+                raw_commits_by_repo[repo] = commits
             for commit in commits:
                 date_str = commit.get("commit", {}).get("author", {}).get("date", "")
                 message = commit.get("commit", {}).get("message", "").split("\n")[0]
@@ -217,20 +220,25 @@ class GitHubClient:
                     commits_by_day[day].append(f"[{repo}] Pushed: {message}")
 
         logger.debug(f"Found {sum(len(v) for v in commits_by_day.values())} commits in {org}")
-        return dict(commits_by_day)
+        return dict(commits_by_day), raw_commits_by_repo
 
-    def fetch_activity_by_day(self, username: str, orgs: list[str], since: datetime) -> dict[str, list[str]]:
+    def fetch_activity_by_day(
+        self, username: str, orgs: list[str], since: datetime
+    ) -> tuple[dict[str, list[str]], dict]:
         activity_by_day: dict[str, list[str]] = defaultdict(list)
+        raw_data: dict = {"events": [], "org_commits": {}}
 
         with console.status("[bold blue]Fetching activity from GitHub...") as status:
             status.update("[bold blue]Fetching personal events...")
             events = self.get_user_events(username, since)
+            raw_data["events"] = events
 
             for org in orgs:
                 status.update(f"[bold blue]Fetching commits from {org}...")
-                org_commits = self.fetch_org_commits(org, username, since)
+                org_commits, raw_org_commits = self.fetch_org_commits(org, username, since)
                 for day, commits in org_commits.items():
                     activity_by_day[day].extend(commits)
+                raw_data["org_commits"].update(raw_org_commits)
 
             for event in events:
                 event_type = event.get("type", "")
@@ -278,4 +286,4 @@ class GitHubClient:
                     if ref:
                         activity_by_day[day].append(f"[{repo_name}] Created {ref_type}: {ref}")
 
-        return dict(activity_by_day)
+        return dict(activity_by_day), raw_data

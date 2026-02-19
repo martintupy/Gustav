@@ -219,9 +219,11 @@ def interactive_pr_loop(
                 no_changes = False
 
 
-def collect_files_content(git: GitClient, files: list[str]) -> str:
+def collect_files_content(git: GitClient, files: list[str], renamed_files: set[str]) -> str:
     content_parts = []
     for file in files:
+        if file in renamed_files:
+            continue
         file_content = git.get_file_content_from_head(file)
         if file_content is not None:
             content_parts.append(f'<file path="{file}">\n{file_content}\n</file>')
@@ -258,7 +260,8 @@ def pull_request(settings: Settings):
     diff_stat = git.get_branch_diff_stat(base_branch)
     diff = git.get_branch_diff(base_branch)
     changed_files = git.get_branch_changed_files(base_branch)
-    files_content = collect_files_content(git, changed_files)
+    renamed_files = git.get_branch_renames(base_branch)
+    files_content = collect_files_content(git, changed_files, renamed_files)
 
     if pr_data:
         pr_number = pr_data["number"]
