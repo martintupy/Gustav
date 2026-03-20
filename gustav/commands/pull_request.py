@@ -12,7 +12,7 @@ from rich.text import Text
 
 from gustav.cache import get_cache_key, get_cached, set_cached
 from gustav.clients.claude import ClaudeClient
-from gustav.clients.git import GitClient
+from gustav.clients.git import GitClient, filter_diff, is_large_file_content
 from gustav.clients.github import GitHubClient
 from gustav.prompts.loader import load_prompt
 from gustav.settings import Settings
@@ -225,42 +225,61 @@ def collect_files_content(git: GitClient, files: list[str], renamed_files: set[s
         if file in renamed_files:
             continue
         file_content = git.get_file_content_from_head(file)
-        if file_content is not None:
+        if file_content is not None and not is_large_file_content(file_content):
             content_parts.append(f'<file path="{file}">\n{file_content}\n</file>')
     return "\n\n".join(content_parts)
 
 
 @click.command()
+@click.option(
+    "--base",
+    "base_branch_opt",
+    default=None,
+    metavar="BRANCH",
+    help="Remote branch to merge into (when updating an existing PR without --base, the PR's current base is used).",
+)
 @click.pass_obj
-def pull_request(settings: Settings):
+def pull_request(settings: Settings, base_branch_opt: str | None):
     """Create or update pull request"""
     claude = ClaudeClient(settings.anthropic)
     git = GitClient()
     github = GitHubClient(settings.github)
 
-    branch = git.get_current_branch()
+    head_branch = git.get_current_branch()
+
     repo = git.get_remote_repo()
     if not repo:
         raise click.ClickException("Could not determine repository from git remote")
 
-    base_branch = github.get_default_branch(repo)
+    pr_data = github.get_pr(repo, head_branch)
 
-    if branch == base_branch:
-        raise click.ClickException(f"Create a feature branch first. You're on '{base_branch}'.")
+    if base_branch_opt is not None:
+        base_branch = base_branch_opt
+    elif pr_data and pr_data.get("base_ref"):
+        base_branch = pr_data["base_ref"]
+    else:
+        base_branch = (
+            git.get_config_value("gustav.prDefaultBase")
+            or settings.git.pr_default_base
+            or github.get_default_branch(repo)
+        )
 
-    needs_push = not git.branch_exists_on_remote(branch) or git.has_unpushed_commits(branch)
+    if head_branch == base_branch:
+        raise click.ClickException(
+            f"Checkout a feature branch first. Current branch matches merge base {base_branch!r}."
+        )
+
+    needs_push = not git.branch_exists_on_remote(head_branch) or git.has_unpushed_commits(head_branch)
     if needs_push:
-        with console.status(f"[bold blue]Pushing '{branch}'..."):
-            git.push(branch)
-        console.print(f"[green]Pushed '{branch}'.[/green]")
+        with console.status(f"[bold blue]Pushing '{head_branch}'..."):
+            git.push(head_branch)
+        console.print(f"[green]Pushed '{head_branch}'.[/green]")
 
-    pr_data = github.get_pr(repo, branch)
-
-    commits = git.get_branch_commits(base_branch)
-    diff_stat = git.get_branch_diff_stat(base_branch)
-    diff = git.get_branch_diff(base_branch)
-    changed_files = git.get_branch_changed_files(base_branch)
-    renamed_files = git.get_branch_renames(base_branch)
+    commits = git.get_branch_commits(base_branch, head=head_branch)
+    diff_stat = git.get_branch_diff_stat(base_branch, head=head_branch)
+    diff = filter_diff(git.get_branch_diff(base_branch, head=head_branch))
+    changed_files = git.get_branch_changed_files(base_branch, head=head_branch)
+    renamed_files = git.get_branch_renames(base_branch, head=head_branch)
     files_content = collect_files_content(git, changed_files, renamed_files)
 
     if pr_data:
@@ -279,7 +298,7 @@ def pull_request(settings: Settings):
             return
 
         title, description = result
-        github.update_pr(repo, pr_number, title, description)
+        github.update_pr(repo, pr_number, title, description, base=base_branch)
         console.print(f"[green]PR #{pr_number} updated.[/green]")
 
     else:
@@ -294,5 +313,5 @@ def pull_request(settings: Settings):
             return
 
         title, description = result
-        pr_url = github.create_pr(repo, branch, title, description, base=base_branch)
+        pr_url = github.create_pr(repo, head_branch, title, description, base=base_branch)
         console.print(f"[green]PR created: {pr_url}[/green]")

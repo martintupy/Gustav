@@ -44,6 +44,7 @@ class GitHubSettings(BaseModel):
 class GitSettings(BaseModel):
     user_email: str | None = None
     user_name: str | None = None
+    pr_default_base: str | None = None
 
 
 class Settings(BaseModel):

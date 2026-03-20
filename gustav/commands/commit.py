@@ -8,7 +8,7 @@ from rich.spinner import Spinner
 
 from gustav.cache import get_cache_key, get_cached, set_cached
 from gustav.clients.claude import ClaudeClient
-from gustav.clients.git import GitClient
+from gustav.clients.git import GitClient, filter_diff, is_large_file_content
 from gustav.prompts.loader import load_prompt
 from gustav.settings import Settings
 
@@ -51,7 +51,7 @@ def collect_files_content(git: GitClient, files: list[str]) -> str:
         if file in renamed_files:
             continue
         file_content = git.get_file_content_from_index(file)
-        if file_content is not None:
+        if file_content is not None and not is_large_file_content(file_content):
             content_parts.append(f'<file path="{file}">\n{file_content}\n</file>')
     return "\n\n".join(content_parts)
 
@@ -86,7 +86,7 @@ def commit(settings: Settings, push: bool):
         staged_files = git.get_staged_files()
 
     diff_stat = git.get_staged_diff_stat()
-    diff = git.get_staged_diff()
+    diff = filter_diff(git.get_staged_diff())
     files_content = collect_files_content(git, staged_files)
 
     commit_msg = generate_commit_message_cached(claude, diff_stat, diff, files_content)
