@@ -87,11 +87,13 @@ class GitHubClient:
             return None
 
         pr = prs[0]
+        base = pr.get("base") or {}
         return {
             "number": pr["number"],
             "title": pr.get("title", ""),
             "body": pr.get("body", ""),
             "url": pr.get("html_url", ""),
+            "base_ref": base.get("ref"),
         }
 
     def create_pr(self, repo: str, branch: str, title: str, body: str, base: str = "main") -> str:
@@ -124,11 +126,11 @@ class GitHubClient:
 
         return response.json().get("html_url", "")
 
-    def update_pr(self, repo: str, pr_number: int, title: str, body: str) -> None:
+    def update_pr(self, repo: str, pr_number: int, title: str, body: str, base: str) -> None:
         response = self._request(
             "PATCH",
             f"repos/{repo}/pulls/{pr_number}",
-            json={"title": title, "body": body},
+            json={"title": title, "body": body, "base": base},
         )
 
         if response.status_code == 404:

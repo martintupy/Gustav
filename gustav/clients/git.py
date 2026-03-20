@@ -1,9 +1,30 @@
-import os
 import re
 import subprocess
 
 import click
 from loguru import logger
+
+MAX_FILE_LINES = 5_000
+MAX_FILE_CHARS = 100_000
+
+
+def is_large_file_content(content: str) -> bool:
+    return content.count("\n") > MAX_FILE_LINES or len(content) > MAX_FILE_CHARS
+
+
+def filter_diff(diff: str) -> str:
+    sections = re.split(r"(?=^diff --git )", diff, flags=re.MULTILINE)
+    filtered = []
+    for section in sections:
+        is_new_file = "new file mode" in section[:500]
+        if is_new_file and is_large_file_content(section):
+            match = re.match(r"diff --git a/.+ b/(.+)", section)
+            filename = match.group(1) if match else "unknown"
+            lines = section.count("\n")
+            filtered.append(f"diff --git a/{filename} b/{filename}\nnew file (content omitted, {lines} lines)\n")
+            continue
+        filtered.append(section)
+    return "".join(filtered)
 
 
 class GitClient:
@@ -44,6 +65,13 @@ class GitClient:
     def get_current_branch(self) -> str:
         result = self._run("branch", "--show-current")
         return result.stdout.strip()
+
+    def get_config_value(self, key: str) -> str | None:
+        result = self._run("config", key, check=False)
+        if result.returncode != 0:
+            return None
+        value = result.stdout.strip()
+        return value or None
 
     def get_staged_files(self) -> list[str]:
         result = self._run("diff", "--cached", "--name-only")
@@ -89,17 +117,20 @@ class GitClient:
         result = self._run("show", f":{file}")
         return result.stdout
 
-    def get_file_content_from_head(self, file: str) -> str | None:
-        result = self._run("cat-file", "-e", f"HEAD:{file}", check=False)
+    def get_file_content_at_ref(self, ref: str, file: str) -> str | None:
+        result = self._run("cat-file", "-e", f"{ref}:{file}", check=False)
         if result.returncode != 0:
             return None
-        result = self._run("show", f"HEAD:{file}", text=False)
+        result = self._run("show", f"{ref}:{file}", text=False)
         if b"\x00" in result.stdout:
             return None
         try:
             return result.stdout.decode("utf-8")
         except UnicodeDecodeError:
             return None
+
+    def get_file_content_from_head(self, file: str) -> str | None:
+        return self.get_file_content_at_ref("HEAD", file)
 
     def _get_base_ref(self, base: str = "main") -> str | None:
         for ref in [f"origin/{base}", base, "origin/master", "master"]:
@@ -108,40 +139,40 @@ class GitClient:
                 return ref
         return None
 
-    def get_branch_diff(self, base: str = "main") -> str:
+    def get_branch_diff(self, base: str = "main", head: str = "HEAD") -> str:
         base_ref = self._get_base_ref(base)
-        logger.debug(f"get_branch_diff: base={base}, base_ref={base_ref}")
+        logger.debug(f"get_branch_diff: base={base}, base_ref={base_ref}, head={head}")
         if base_ref:
-            result = self._run("diff", f"{base_ref}...HEAD", check=False)
-            logger.debug(f"diff {base_ref}...HEAD returned {len(result.stdout)} chars")
+            result = self._run("diff", f"{base_ref}...{head}", check=False)
+            logger.debug(f"diff {base_ref}...{head} returned {len(result.stdout)} chars")
             if result.returncode == 0:
                 return result.stdout
-        result = self._run("diff", "--root", "HEAD", check=False)
+        result = self._run("diff", "--root", head, check=False)
         return result.stdout if result.returncode == 0 else ""
 
-    def get_branch_diff_stat(self, base: str = "main") -> str:
+    def get_branch_diff_stat(self, base: str = "main", head: str = "HEAD") -> str:
         base_ref = self._get_base_ref(base)
         if base_ref:
-            result = self._run("diff", f"{base_ref}...HEAD", "--stat", check=False)
+            result = self._run("diff", f"{base_ref}...{head}", "--stat", check=False)
             if result.returncode == 0:
                 return result.stdout
-        result = self._run("diff", "--root", "HEAD", "--stat", check=False)
+        result = self._run("diff", "--root", head, "--stat", check=False)
         return result.stdout if result.returncode == 0 else ""
 
-    def get_branch_commits(self, base: str = "main") -> str:
+    def get_branch_commits(self, base: str = "main", head: str = "HEAD") -> str:
         base_ref = self._get_base_ref(base)
         if base_ref:
-            result = self._run("log", f"{base_ref}..HEAD", "--oneline", check=False)
+            result = self._run("log", f"{base_ref}..{head}", "--oneline", check=False)
             if result.returncode == 0:
                 return result.stdout
-        result = self._run("log", "--oneline", check=False)
+        result = self._run("log", head, "--oneline", check=False)
         return result.stdout if result.returncode == 0 else ""
 
-    def get_branch_renames(self, base: str = "main") -> set[str]:
+    def get_branch_renames(self, base: str = "main", head: str = "HEAD") -> set[str]:
         base_ref = self._get_base_ref(base)
         if not base_ref:
             return set()
-        result = self._run("diff", f"{base_ref}...HEAD", "-M", "--name-status", check=False)
+        result = self._run("diff", f"{base_ref}...{head}", "-M", "--name-status", check=False)
         renamed_files: set[str] = set()
         for line in result.stdout.strip().split("\n"):
             if not line:
@@ -151,13 +182,13 @@ class GitClient:
                 renamed_files.add(parts[2])
         return renamed_files
 
-    def get_branch_changed_files(self, base: str = "main") -> list[str]:
+    def get_branch_changed_files(self, base: str = "main", head: str = "HEAD") -> list[str]:
         base_ref = self._get_base_ref(base)
         if base_ref:
-            result = self._run("diff", f"{base_ref}...HEAD", "--name-only", check=False)
+            result = self._run("diff", f"{base_ref}...{head}", "--name-only", check=False)
             if result.returncode == 0:
                 return [f for f in result.stdout.strip().split("\n") if f]
-        result = self._run("ls-tree", "-r", "--name-only", "HEAD", check=False)
+        result = self._run("ls-tree", "-r", "--name-only", head, check=False)
         if result.returncode == 0:
             return [f for f in result.stdout.strip().split("\n") if f]
         return []
@@ -175,7 +206,7 @@ class GitClient:
         return bool(result.stdout.strip())
 
     def has_unpushed_commits(self, branch: str) -> bool:
-        result = self._run("rev-list", f"origin/{branch}..HEAD", "--count", check=False)
+        result = self._run("rev-list", f"origin/{branch}..{branch}", "--count", check=False)
         if result.returncode != 0:
             return False
         count = result.stdout.strip()
